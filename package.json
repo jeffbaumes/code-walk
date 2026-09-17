@@ -1,0 +1,43 @@
+{
+  "name": "code-walk",
+  "version": "0.1.0",
+  "description": "Guided, git-referenced code walkthroughs rendered as a clean local web page.",
+  "type": "module",
+  "bin": {
+    "code-walk": "bin/code-walk.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "web",
+    "skills",
+    ".claude-plugin",
+    "scripts"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "demo": "node scripts/demo.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "diff": "^9.0.0",
+    "markdown-it": "^15.0.2",
+    "mermaid": "^12.0.0",
+    "shiki": "^4.4.3",
+    "yaml": "^2.9.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeffbaumes/code-walk.git"
+  },
+  "keywords": [
+    "code-review",
+    "git",
+    "diff",
+    "walkthrough",
+    "claude-code"
+  ]
+}

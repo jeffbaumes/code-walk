@@ -1,0 +1,16 @@
+{
+  "name": "code-walk",
+  "owner": {
+    "name": "Jeff Baumes"
+  },
+  "metadata": {
+    "description": "Git-referenced code walkthroughs rendered as a clean local web page."
+  },
+  "plugins": [
+    {
+      "name": "code-walk",
+      "source": "./",
+      "description": "Skill for writing and serving Code Walk documents: markdown walkthroughs whose snippets are git references (files at commits, diffs, staged changes)."
+    }
+  ]
+}

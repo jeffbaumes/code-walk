@@ -1,0 +1,10 @@
+{
+  "name": "code-walk",
+  "version": "0.1.0",
+  "description": "Skill for writing and serving Code Walk documents: markdown walkthroughs whose snippets are git references.",
+  "author": {
+    "name": "Jeff Baumes"
+  },
+  "repository": "https://github.com/jeffbaumes/code-walk",
+  "license": "MIT"
+}
