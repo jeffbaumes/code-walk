@@ -219,7 +219,9 @@ function renderRows(s) {
     } else {
       const n = j - i;
       const where = i === 0 ? 'up' : j === s.rows.length ? 'down' : 'mid';
-      const label = `${n} ${s.mode === 'diff' ? 'unchanged ' : ''}line${n === 1 ? '' : 's'}`;
+      // A line selection hides everything around it, changed lines included.
+      const changed = s.mode === 'diff' ? s.rows.slice(i, j).filter((r) => r.t !== ' ').length : 0;
+      const label = changed ? `${n} line${n === 1 ? '' : 's'}, ${changed} changed` : `${n} ${s.mode === 'diff' ? 'unchanged ' : ''}line${n === 1 ? '' : 's'}`;
       out.push(`<tbody class="cw-fold ${where}"><tr class="cw-expander"><td colspan="${cols}"><button type="button" aria-expanded="false"><span class="cw-more">${EXPAND_ICON}<span>${label}</span></span><span class="cw-less">${COLLAPSE_ICON}<span>Hide ${label}</span></span></button></td></tr>${rows.join('')}</tbody>`);
     }
     i = j;

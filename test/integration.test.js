@@ -365,3 +365,15 @@ test('remote repos: a URL is cloned into the cache and read like a local repo', 
     delete process.env.CODE_WALK_HOME;
   }
 });
+
+test('fold labels only say "unchanged" when no changed lines are hidden', async () => {
+  const foldLabels = async (info) => {
+    const w = await walkFromSource(`\`\`\`${info}\n\`\`\`\n`, null, { fallbackDir: repo });
+    const html = renderWalkHtml(await prepareWalk(w, { highlight: false }), w);
+    return [...html.matchAll(/<span class="cw-more">.*?<span>(.*?)<\/span>/g)].map((m) => m[1]);
+  };
+  // A selection hides the rest of the file, including the changes outside it.
+  assert.deepEqual(await foldLabels('diff main...feature/rate-limit -- src/router.ts R14-15'), ['13 lines, 2 changed', '8 lines, 3 changed']);
+  // Context between hunks really is unchanged.
+  assert.deepEqual(await foldLabels('diff HEAD -- src/limiter.ts'), ['11 unchanged lines', '7 unchanged lines']);
+});
