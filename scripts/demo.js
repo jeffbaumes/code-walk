@@ -137,6 +137,8 @@ repos:
   gateway: ./gateway
 ---
 
+> 📖 **Code Walk** — a guided tour whose code is git references, so this file looks sparse as plain text. To view it, run \`npx -y github:jeffbaumes/code-walk serve rate-limit.md\` ([code-walk](https://github.com/jeffbaumes/code-walk)).
+
 This branch adds a **token bucket** rate limiter and puts it in front of the router. Each client gets a bucket that refills at a steady rate; a request spends one token or gets a \`429\`.
 
 \`\`\`diff --stat main...feature/rate-limit

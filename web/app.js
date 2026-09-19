@@ -72,9 +72,17 @@
   }
 
   // ---- folds ------------------------------------------------------------------------
+  function openFold(node) {
+    const fold = node.closest('.cw-fold');
+    if (!fold) return;
+    fold.classList.add('open');
+    fold.querySelector('.cw-expander button')?.setAttribute('aria-expanded', 'true');
+  }
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('.cw-expander button');
-    if (btn) btn.closest('.cw-fold').classList.add('open');
+    if (!btn) return;
+    const open = btn.closest('.cw-fold').classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
   });
 
   // ---- line selection ---------------------------------------------------------------
@@ -165,7 +173,7 @@
     for (let i = span.start; i < span.end; i++) {
       const r = rows[i];
       r.classList.add('sel');
-      r.closest('.cw-fold')?.classList.add('open');
+      openFold(r);
       if (flash) {
         r.classList.remove('flash');
         void r.offsetWidth;
@@ -641,7 +649,7 @@
         if (c.status !== 'resolved') {
           r.classList.add('commented');
           r.classList.remove('resolved-only');
-          r.closest('.cw-fold')?.classList.add('open');
+          openFold(r);
         } else if (!r.classList.contains('commented')) {
           r.classList.add('commented', 'resolved-only');
         }
@@ -853,7 +861,7 @@
       node = hit && document.getElementById(`comment-${hit.id}`);
     }
     if (!node) return toast('That comment isn’t in this walk');
-    node.closest('.cw-fold')?.classList.add('open');
+    openFold(node);
     const top = window.scrollY + node.getBoundingClientRect().top - window.innerHeight * 0.3;
     window.scrollTo({ top: Math.max(0, top) });
     node.classList.remove('flash');
@@ -869,10 +877,17 @@
     const byId = new Map(tocLinks.map((a) => [a.dataset.id, a]));
     const hs = $$('.cw-article h2, .cw-article h3').filter((h) => byId.has(h.id));
     const update = () => {
-      let active = hs[0];
+      // Above the first heading, the title link at the top of the sidebar is the active one.
+      let active = null;
       for (const h of hs) if (h.getBoundingClientRect().top < window.innerHeight * 0.25) active = h;
-      tocLinks.forEach((a) => a.classList.toggle('active', active && a.dataset.id === active.id));
+      const id = active ? active.id : '';
+      tocLinks.forEach((a) => a.classList.toggle('active', a.dataset.id === id));
     };
+    tocLinks[0].addEventListener('click', (e) => {
+      e.preventDefault();
+      window.scrollTo({ top: 0 });
+      history.replaceState(null, '', location.pathname);
+    });
     window.addEventListener('scroll', update, { passive: true });
     update();
   }

@@ -291,3 +291,77 @@ test('--stat summaries render and check reports their warnings', async () => {
   }
   assert.match(lines.join('\n'), /summary\.md:6: warning: group "Tests": "test\/" matches no changed files/);
 });
+
+test('viewing hint: not rendered, and check warns when it is missing', async () => {
+  const hint = '> 📖 **Code Walk** — view it with `code-walk serve hint.md` ([code-walk](https://github.com/jeffbaumes/code-walk)).\n';
+  const withHint = path.join(dir, 'hint.md');
+  const without = path.join(dir, 'nohint.md');
+  writeFileSync(withHint, `---\nrepos:\n  gateway: ./gateway\n---\n\n${hint}\n# Hinted\n\n> An ordinary quote.\n`);
+  writeFileSync(without, '---\nrepos:\n  gateway: ./gateway\n---\n\n# Plain\n');
+  const w = await loadWalk(withHint);
+  const prepared = await prepareWalk(w);
+  assert.equal(prepared.hasHint, true);
+  const html = renderWalkHtml(prepared, w);
+  assert.doesNotMatch(html, /Code Walk/);
+  assert.match(html, /An ordinary quote/);
+  assert.equal((await prepareWalk(await loadWalk(without))).hasHint, false);
+
+  const { checkCommand } = await import('../src/commands/check.js');
+  const run = async (file) => {
+    const lines = [];
+    const log = console.log;
+    console.log = (...a) => lines.push(a.join(' '));
+    try { await checkCommand([file]); } finally { console.log = log; }
+    return lines.join('\n');
+  };
+  assert.match(await run(without), /nohint\.md: warning: no viewing hint/);
+  assert.doesNotMatch(await run(withHint), /viewing hint/);
+});
+
+test('page: folds toggle both ways, and the sidebar starts with a link to the top', async () => {
+  const { pageHtml } = await import('../src/render.js');
+  const w = await loadWalk(path.join(dir, 'hint.md'));
+  const walkFile = path.join(dir, 'folds.md');
+  writeFileSync(walkFile, '---\nrepos:\n  gateway: ./gateway\n---\n# Folds\n\n## One\n\n```show main:src/router.ts L1-2\n```\n\n### Two\n');
+  const fw = await loadWalk(walkFile);
+  const prepared = await prepareWalk(fw);
+  const content = renderWalkHtml(prepared, fw);
+  assert.match(content, /class="cw-more"/);
+  assert.match(content, /class="cw-less">.*Hide \d+ lines/);
+  const page = pageHtml({ title: prepared.title, toc: prepared.toc, content, walk: fw, walkName: 'folds', hasMermaid: false });
+  const links = [...page.matchAll(/<nav class="cw-toc"[\s\S]*?<\/nav>/g)][0][0].match(/<a [^>]*>[^<]*<\/a>/g);
+  assert.match(links[0], /class="l1 home" href="#"[^>]*>Folds</);
+  assert.equal(links.length, 3);
+  assert.ok(w);
+});
+
+test('remote repos: a URL is cloned into the cache and read like a local repo', async () => {
+  const cache = mkdtempSync(path.join(os.tmpdir(), 'code-walk-cache-'));
+  process.env.CODE_WALK_HOME = cache;
+  try {
+    const url = `file://${repo}`;
+    const walkFile = path.join(dir, 'remote.md');
+    writeFileSync(walkFile, `---\nrepo: ${url}\n---\n# Remote\n\n\`\`\`show feature/rate-limit:src/limiter.ts L19-24\n\`\`\`\n\n\`\`\`diff main...feature/rate-limit -- src/router.ts\n\`\`\`\n\n\`\`\`show src/limiter.ts\n\`\`\`\n`);
+    const w = await loadWalk(walkFile);
+    assert.equal(w.repos[0].name, 'gateway');
+    assert.equal(w.repos[0].remote, url);
+    const prepared = await prepareWalk(w, { highlight: false });
+    const [file, diff, worktree] = prepared.refs;
+    assert.equal(file.error, undefined);
+    assert.equal(file.result.sections[0].sides[0].rev, 'feature/rate-limit');
+    assert.equal(diff.error, undefined);
+    assert.equal(diff.result.sections[0].added, 6);
+    assert.match(file.result.repo.root, /repos[\\/]gateway-[0-9a-f]{12}$/);
+    assert.match(file.result.sections[0].displayCmd, /^git -C .*repos\/gateway-[0-9a-f]{12} show feature\/rate-limit:src\/limiter\.ts$/);
+    // Working-tree and staged content only exist locally.
+    assert.match(worktree.error, /isn't available in a remote repo/);
+
+    // An unreachable URL fails with a clear message, and ad hoc `-C <url>` works too.
+    const bad = await walkFromSource('', null, { fallbackDir: repo });
+    await assert.rejects(resolveRef(bad, parseRef('show -C file:///nonexistent/nope.git main:x'), { tokens: false }), /could not clone/);
+    const adhoc = await resolveRef(bad, parseRef(`show -C ${url} main:src/router.ts L1-2`), { tokens: false });
+    assert.equal(adhoc.repo.remote, url);
+  } finally {
+    delete process.env.CODE_WALK_HOME;
+  }
+});

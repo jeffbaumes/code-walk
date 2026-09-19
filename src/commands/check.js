@@ -24,6 +24,9 @@ export async function checkCommand(files) {
     for (const r of prepared.refs.filter((x) => !x.error && x.warnings?.length)) {
       for (const w of r.warnings) console.log(`${rel}:${r.line}: warning: ${w}\n    \`\`\`${r.info}`);
     }
+    if (!prepared.hasHint) {
+      console.log(`${rel}: warning: no viewing hint at the top. Add a "> 📖 Code Walk …" quote so people reading the raw .md know how to view it (see the code-walk skill)`);
+    }
     failed += errors.length;
     const ok = prepared.refs.length - errors.length;
     console.log(`${errors.length ? '✗' : '✓'} ${rel}: ${ok}/${prepared.refs.length} references resolve`);

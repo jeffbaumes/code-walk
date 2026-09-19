@@ -42,7 +42,15 @@ function memo(key, fn) {
 
 export async function repoRoot(dir) {
   const out = await git(dir, ['rev-parse', '--show-toplevel'], { allowFail: true });
-  return out ? out.trim() : null;
+  if (out) return out.trim();
+  // A bare repo (such as the clone of a remote repo) has no work tree; its git dir is the root.
+  const bare = await git(dir, ['rev-parse', '--is-bare-repository'], { allowFail: true });
+  if (bare && bare.trim() === 'true') return (await git(dir, ['rev-parse', '--absolute-git-dir'])).trim();
+  return null;
+}
+
+function isBare(root) {
+  return memo(`bare:${root}`, async () => (await git(root, ['rev-parse', '--is-bare-repository'])).trim() === 'true');
 }
 
 /** Resolve a revision to a full commit sha. Not memoized: branches move. */
@@ -91,7 +99,14 @@ export async function commitsBetween(root, from, to) {
  * Read a file from a side. side: {type:'commit', sha} | {type:'index'} | {type:'worktree'}.
  * Returns a Buffer, or null if the path does not exist on that side.
  */
-export function readSide(root, side, file) {
+export async function readSide(root, side, file) {
+  if (side.type !== 'commit' && (await isBare(root))) {
+    throw new GitError(`${side.type === 'index' ? 'the staged index' : 'the working tree'} isn't available in a remote repo; use a branch, tag or commit`);
+  }
+  return readSideUnchecked(root, side, file);
+}
+
+function readSideUnchecked(root, side, file) {
   if (side.type === 'commit') {
     return memo(`blob:${root}:${side.sha}:${file}`, () =>
       git(root, ['cat-file', 'blob', `${side.sha}:${file}`], { buffer: true, allowFail: true }),

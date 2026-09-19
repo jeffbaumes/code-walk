@@ -12,9 +12,19 @@ CLI: `code-walk` (if missing: `npx -y github:jeffbaumes/code-walk <command>`).
 ## Workflow
 
 1. `code-walk outline main...HEAD` — changed files, hunks (`hunk=N`, line ranges) and commits, printed as block lines. Copy from it; don't guess line numbers.
-2. Write the walk to `.code-walk/<short-name>.md` in the repo (or a temp dir for other people's repos).
+2. Write the walk to `.code-walk/<short-name>.md` in the repo (or a temp dir for other people's repos). Start it, right after the frontmatter, with the viewing hint (below).
 3. `code-walk check .code-walk/<short-name>.md` — fix every error it reports.
 4. `code-walk serve .code-walk/<short-name>.md --open` (run in the background). The page live-reloads on save, so later edits just need a save. Give the user the printed URL.
+
+## Viewing hint
+
+Anyone who opens the raw `.md` (on GitHub, in an editor, in a diff) sees only fenced git arguments. Begin every walk, right after the frontmatter, with this blockquote so they know how to view it, using the walk's real path:
+
+````md
+> 📖 **Code Walk** — a guided tour whose code is git references, so this file looks sparse as plain text. To view it, run `npx -y github:jeffbaumes/code-walk serve .code-walk/<short-name>.md` ([code-walk](https://github.com/jeffbaumes/code-walk)).
+````
+
+The viewer doesn't render this quote, and `code-walk check` warns if it's missing.
 
 ## Block syntax
 
@@ -77,6 +87,7 @@ Files in a summary link to their snippets elsewhere in the walk. `check` warns a
 
 - Without `-- <path>` a diff shows every changed file. Line selections need exactly one file.
 - Optional block body: `highlight: 29-30` (new side / file lines; `L12-13` for the old side).
+- Repos can be git URLs (`repo: https://github.com/owner/name`, or as `repos:` values). Code Walk clones into a cache and refs like `main`, `feature/x` and tags work; staged and working-tree blocks don't. Use this for other people's repos instead of cloning by hand.
 - Multiple repos: declare them in frontmatter, pick with `-C <name>` (first is default):
 
 ```yaml
