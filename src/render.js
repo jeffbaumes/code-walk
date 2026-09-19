@@ -222,7 +222,10 @@ function renderRows(s) {
       // A line selection hides everything around it, changed lines included.
       const changed = s.mode === 'diff' ? s.rows.slice(i, j).filter((r) => r.t !== ' ').length : 0;
       const label = changed ? `${n} line${n === 1 ? '' : 's'}, ${changed} changed` : `${n} ${s.mode === 'diff' ? 'unchanged ' : ''}line${n === 1 ? '' : 's'}`;
-      out.push(`<tbody class="cw-fold ${where}"><tr class="cw-expander"><td colspan="${cols}"><button type="button" aria-expanded="false"><span class="cw-more">${EXPAND_ICON}<span>${label}</span></span><span class="cw-less">${COLLAPSE_ICON}<span>Hide ${label}</span></span></button></td></tr>${rows.join('')}</tbody>`);
+      const bar = `<tr class="cw-expander"><td colspan="${cols}"><button type="button" aria-expanded="false"><span class="cw-more">${EXPAND_ICON}<span>${label}</span></span><span class="cw-less">${COLLAPSE_ICON}<span>Hide ${label}</span></span></button></td></tr>`;
+      // Once open, the bar stays at the edge next to the visible code: below the rows for a fold at
+      // the end of the file, above them otherwise.
+      out.push(`<tbody class="cw-fold ${where}">${where === 'down' ? rows.join('') + bar : bar + rows.join('')}</tbody>`);
     }
     i = j;
   }

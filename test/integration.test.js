@@ -377,3 +377,13 @@ test('fold labels only say "unchanged" when no changed lines are hidden', async 
   // Context between hunks really is unchanged.
   assert.deepEqual(await foldLabels('diff HEAD -- src/limiter.ts'), ['11 unchanged lines', '7 unchanged lines']);
 });
+
+test('a fold at the end of a file keeps its bar below the rows', async () => {
+  const w = await walkFromSource('```diff main...feature/rate-limit -- src/router.ts R14-15\n```\n', null, { fallbackDir: repo });
+  const html = renderWalkHtml(await prepareWalk(w, { highlight: false }), w);
+  const folds = html.split('<tbody class="cw-fold ').slice(1).map((f) => f.split('</tbody>')[0]);
+  const up = folds.find((f) => f.startsWith('up'));
+  const down = folds.find((f) => f.startsWith('down'));
+  assert.ok(up.indexOf('cw-expander') < up.indexOf('<tr class="r'));
+  assert.ok(down.indexOf('cw-expander') > down.lastIndexOf('<tr class="r'));
+});
