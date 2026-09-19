@@ -126,6 +126,7 @@ body {
     line-height: 1.4;
     transition: color .15s, border-color .15s;
   }
+  .cw-toc a.home { color: var(--fg); font-weight: 600; }
   .cw-toc a.l3 { padding-left: 22px; font-size: 12.5px; }
   .cw-toc a:hover { color: var(--fg); }
   .cw-toc a.active { color: var(--fg); border-left-color: var(--accent); font-weight: 500; }
@@ -359,8 +360,9 @@ table.cw-table { border-collapse: collapse; display: block; overflow-x: auto; fo
 }
 
 .cw-fold:not(.open) tr.r { display: none; }
-.cw-fold.open .cw-expander { display: none; }
 .cw-expander td { padding: 0 !important; }
+.cw-expander button > span { display: flex; align-items: center; gap: 8px; }
+.cw-fold:not(.open) .cw-less, .cw-fold.open .cw-more { display: none !important; }
 .cw-expander button {
   appearance: none;
   display: flex;

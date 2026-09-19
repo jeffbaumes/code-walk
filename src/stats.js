@@ -3,7 +3,7 @@ import YAML from 'yaml';
 import { changedFiles, commitsBetween, numstat, resolveCommit } from './git.js';
 import { RefError } from './refs.js';
 import { commitSides, diffSides } from './resolve.js';
-import { resolveRepo } from './walk.js';
+import { repoDirArg, resolveRepo } from './walk.js';
 
 export const UNGROUPED = 'Ungrouped';
 
@@ -134,7 +134,8 @@ function sum(files) {
 
 function displayCommand(repo, ref) {
   const t = ['git'];
-  if (!repo.isDefault) t.push('-C', repo.configured);
+  const dirArg = repoDirArg(repo);
+  if (dirArg) t.push('-C', dirArg);
   t.push(ref.command, '--stat');
   if (ref.cached) t.push('--cached');
   t.push(...ref.revs);

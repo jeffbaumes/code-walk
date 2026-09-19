@@ -7,7 +7,7 @@ import {
 import { RefError } from './refs.js';
 import { diffRows, fileRows, groupHunks, parseHighlight, selectionSpan, splitLines } from './rows.js';
 import { highlightLines, langForPath } from './highlight.js';
-import { resolveRepo } from './walk.js';
+import { repoDirArg, resolveRepo } from './walk.js';
 
 async function commitSide(root, rev, label = rev) {
   const sha = await resolveCommit(root, rev);
@@ -217,7 +217,8 @@ function linkTokens(walk, repo, result, s) {
 function displayCommand(repo, result, s) {
   const { ref } = result;
   const t = ['git'];
-  if (!repo.isDefault) t.push('-C', repo.configured);
+  const dirArg = repoDirArg(repo);
+  if (dirArg) t.push('-C', dirArg);
   if (s.mode === 'file') {
     const side = s.sides[0];
     if (side.type === 'worktree') return `cat ${repo.isDefault ? s.path : path.join(repo.configured, s.path)}`;

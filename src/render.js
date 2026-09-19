@@ -26,12 +26,28 @@ function slugify(text, used) {
   return slug;
 }
 
+// Walks open with a blockquote telling people who see the raw .md how to view it. The viewer
+// is already the answer, so it doesn't render that quote.
+const HINT_RE = /^📖\s*\**Code Walk/;
+
+function stripViewingHint(tokens) {
+  const i = tokens.findIndex((t) => t.type === 'blockquote_open' && t.level === 0);
+  if (i === -1) return false;
+  const inline = tokens[i + 2];
+  if (!inline || inline.type !== 'inline' || !HINT_RE.test(inline.content)) return false;
+  let j = i + 1;
+  while (tokens[j].type !== 'blockquote_close' || tokens[j].level !== 0) j++;
+  tokens.splice(i, j - i + 1);
+  return true;
+}
+
 /**
  * Parse a walk body and resolve every reference block.
  * Returns { tokens, refs: [{ info, line, result?, error? }], title, toc }.
  */
 export async function prepareWalk(walk, { highlight = true } = {}) {
   const tokens = md.parse(walk.body, {});
+  const hasHint = stripViewingHint(tokens);
   const used = new Set();
   const toc = [];
   let title = walk.title;
@@ -76,7 +92,7 @@ export async function prepareWalk(walk, { highlight = true } = {}) {
     }
   }
   await Promise.all(jobs);
-  return { tokens, refs, title, toc };
+  return { tokens, refs, title, toc, hasHint };
 }
 
 md.renderer.rules.table_open = () => '<table class="cw-table">\n';
@@ -125,7 +141,7 @@ function renderCommitCard(result) {
 function repoLabel(result) {
   const walk = renderCtx.walk;
   if (!walk || (!walk.multiRepo && result.repo.isDefault)) return '';
-  return `<span class="cw-repo" title="${esc(result.repo.root)}">${esc(result.repo.name)}</span>`;
+  return `<span class="cw-repo" title="${esc(result.repo.remote || result.repo.root)}">${esc(result.repo.name)}</span>`;
 }
 
 function sideBadge(side) {
@@ -203,7 +219,8 @@ function renderRows(s) {
     } else {
       const n = j - i;
       const where = i === 0 ? 'up' : j === s.rows.length ? 'down' : 'mid';
-      out.push(`<tbody class="cw-fold ${where}"><tr class="cw-expander"><td colspan="${cols}"><button type="button">${EXPAND_ICON}<span>${n} ${s.mode === 'diff' ? 'unchanged ' : ''}line${n === 1 ? '' : 's'}</span></button></td></tr>${rows.join('')}</tbody>`);
+      const label = `${n} ${s.mode === 'diff' ? 'unchanged ' : ''}line${n === 1 ? '' : 's'}`;
+      out.push(`<tbody class="cw-fold ${where}"><tr class="cw-expander"><td colspan="${cols}"><button type="button" aria-expanded="false"><span class="cw-more">${EXPAND_ICON}<span>${label}</span></span><span class="cw-less">${COLLAPSE_ICON}<span>Hide ${label}</span></span></button></td></tr>${rows.join('')}</tbody>`);
     }
     i = j;
   }
@@ -211,6 +228,8 @@ function renderRows(s) {
 }
 
 const EXPAND_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="m8.177.677 2.896 2.896a.25.25 0 0 1-.177.427H8.75v1.25a.75.75 0 0 1-1.5 0V4H5.104a.25.25 0 0 1-.177-.427L7.823.677a.25.25 0 0 1 .354 0ZM7.25 10.75a.75.75 0 0 1 1.5 0V12h2.146a.25.25 0 0 1 .177.427l-2.896 2.896a.25.25 0 0 1-.354 0l-2.896-2.896A.25.25 0 0 1 5.104 12H7.25v-1.25Zm-5-2a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5ZM6 8a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1 0-1.5h.5A.75.75 0 0 1 6 8Zm2.25.75a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5ZM12 8a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1 0-1.5h.5A.75.75 0 0 1 12 8Zm2.25.75a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5Z"/></svg>';
+
+const COLLAPSE_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M10.896 2H8.75V.75a.75.75 0 0 0-1.5 0V2H5.104a.25.25 0 0 0-.177.427l2.896 2.896a.25.25 0 0 0 .354 0l2.896-2.896A.25.25 0 0 0 10.896 2ZM8.75 15.25a.75.75 0 0 1-1.5 0V14H5.104a.25.25 0 0 1-.177-.427l2.896-2.896a.25.25 0 0 1 .354 0l2.896 2.896a.25.25 0 0 1-.177.427H8.75v1.25Zm-6.5-6.5a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5ZM6 8a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1 0-1.5h.5A.75.75 0 0 1 6 8Zm2.25.75a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5ZM12 8a.75.75 0 0 1-.75.75h-.5a.75.75 0 0 1 0-1.5h.5A.75.75 0 0 1 12 8Zm2.25.75a.75.75 0 0 0 0-1.5h-.5a.75.75 0 0 0 0 1.5h.5Z"/></svg>';
 
 function renderRow(s, r) {
   const hl = s.highlight && s.highlight.some((spec) => rowMatches(r, spec, s.mode)) ? ' hl' : '';
@@ -260,7 +279,7 @@ export function tildify(p) {
 
 export function pageHtml({ title, toc, content, walk, walkName, hasMermaid }) {
   const tocHtml = toc.length
-    ? `<nav class="cw-toc" aria-label="Contents"><div class="cw-toc-inner">${toc.map((h) => `<a class="l${h.level}" href="#${esc(h.id)}" data-id="${esc(h.id)}">${esc(h.text)}</a>`).join('')}</div></nav>`
+    ? `<nav class="cw-toc" aria-label="Contents"><div class="cw-toc-inner"><a class="l1 home" href="#" data-id="">${esc(title || walkName)}</a>${toc.map((h) => `<a class="l${h.level}" href="#${esc(h.id)}" data-id="${esc(h.id)}">${esc(h.text)}</a>`).join('')}</div></nav>`
     : '';
   const cfg = { walk: walkName, walkPath: walk.walkPath, multiRepo: walk.multiRepo };
   const bodyHasH1 = /^<h1[\s>]/.test(content.trimStart());
@@ -279,7 +298,7 @@ ${tocHtml}
 <main class="cw-main">
 <header class="cw-header">
   ${title && !bodyHasH1 ? `<h1>${esc(title)}</h1>` : ''}
-  <div class="cw-walkmeta">${walk.walkPath ? `<code>${esc(tildify(walk.walkPath))}</code>` : ''}${walk.repos.map((r) => `<span class="cw-repo-meta" title="${esc(r.path)}">${esc(r.name)}</span>`).join('')}</div>
+  <div class="cw-walkmeta">${walk.walkPath ? `<code>${esc(tildify(walk.walkPath))}</code>` : ''}${walk.repos.map((r) => `<span class="cw-repo-meta" title="${esc(r.remote || r.path)}">${esc(r.name)}</span>`).join('')}</div>
 </header>
 <article class="cw-article">
 ${content}
@@ -360,7 +379,7 @@ function renderStat(stat) {
     ? `<div class="cw-sum-warnings">${stat.warnings.map((w) => `<div>⚠ ${esc(w)}</div>`).join('')}</div>` : '';
   const empty = stat.files.length ? '' : '<div class="cw-note">No changes</div>';
   const repoTag = renderCtx.walk && (renderCtx.walk.multiRepo || !stat.repo.isDefault)
-    ? `<span class="cw-repo" title="${esc(stat.repo.root)}">${esc(stat.repo.name)}</span>` : '';
+    ? `<span class="cw-repo" title="${esc(stat.repo.remote || stat.repo.root)}">${esc(stat.repo.name)}</span>` : '';
 
   return `<div class="cw-block"><section class="cw-summary" data-repo="${esc(stat.repo.root)}">
 <header class="cw-head">

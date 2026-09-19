@@ -21,6 +21,12 @@ highlight: 29-30
 ```
 ````
 
+A walk begins with a short hint, so someone who opens the raw `.md` on GitHub or in an editor knows how to view it. The viewer doesn't render the hint, and `code-walk check` warns when it's missing:
+
+```md
+> 📖 **Code Walk** — a guided tour whose code is git references, so this file looks sparse as plain text. To view it, run `npx -y github:jeffbaumes/code-walk serve rate-limit.md` ([code-walk](https://github.com/jeffbaumes/code-walk)).
+```
+
 ## Install
 
 **The CLI** (Node ≥ 20):
@@ -111,6 +117,14 @@ repos:
 ---
 ```
 
+**Remote repos:** a repo can be a git URL (`https://`, `ssh://`, `git://`, `file://` or `git@host:owner/repo`) instead of a path. Code Walk keeps a bare clone in `~/.code-walk/repos/` (override with `CODE_WALK_HOME`), fetches it once per `serve`/`check` run, and falls back to the cached clone when offline. Branches and tags keep their names (`main`, `feature/x`, `v1.2`). Staged and working-tree blocks aren't available for remote repos. A URL also works ad hoc as `-C <url>`.
+
+```yaml
+---
+repo: https://github.com/jeffbaumes/code-walk
+---
+```
+
 **Mermaid:** standard ` ```mermaid ` blocks.
 
 ## Links
@@ -126,7 +140,8 @@ repos:
 - **Copying:**
   - `y` or the 🔗 button copies the link.
   - `Y` or shift-🔗 copies a prompt-ready reference that includes the repo path.
-- **Navigation:** `j` / `k` jump between sections.
+- **Navigation:** `j` / `k` jump between sections. The title at the top of the sidebar scrolls back to the top.
+- **Folds:** click a collapsed-lines bar to expand it; click it again ("Hide N lines") to collapse.
 
 ## Review comments
 
