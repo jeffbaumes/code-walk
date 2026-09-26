@@ -137,7 +137,7 @@ A published page (like this one) shows its comments read-only. Here's a thread f
 code-walk build docs/index.md -o docs/index.html
 ```
 
-That's the command behind this page: a [GitHub Actions workflow](https://github.com/jeffbaumes/code-walk/blob/main/.github/workflows/pages.yml) runs it on every push to `main` and publishes the result to GitHub Pages, so only the walk is checked in.
+That's the command behind this page: a [GitHub Actions workflow](https://github.com/jeffbaumes/code-walk/blob/main/.github/workflows/pages.yml) runs it on every push to `main` and publishes the result to GitHub Pages.
 
 ## Reference
 
