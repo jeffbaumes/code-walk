@@ -1,7 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -386,4 +386,46 @@ test('a fold at the end of a file keeps its bar below the rows', async () => {
   const down = folds.find((f) => f.startsWith('down'));
   assert.ok(up.indexOf('cw-expander') < up.indexOf('<tr class="r'));
   assert.ok(down.indexOf('cw-expander') > down.lastIndexOf('<tr class="r'));
+});
+
+test('build: a self-contained static page with read-only comments and no local paths', async () => {
+  const { buildCommand } = await import('../src/commands/build.js');
+  const site = mkdtempSync(path.join(os.tmpdir(), 'code-walk-build-'));
+  const src = path.join(site, 'walks');
+  mkdirSync(src);
+  writeFileSync(path.join(src, 'limiter.md'), `---\ntitle: Limiter\nrepo: ${repo}\n---\n\n\`\`\`diff main...feature/rate-limit -- src/router.ts\n\`\`\`\n`);
+  writeFileSync(path.join(src, 'limiter.comments.json'), JSON.stringify({
+    version: 1,
+    comments: [{
+      id: 'abc123', author: 'Reviewer', created: '2026-01-01T00:00:00.000Z', status: 'open', body: 'Why **429**?', replies: [],
+      anchor: { link: 'diff x -- src/router.ts', range: 'R14-15', path: 'src/router.ts', mode: 'diff', repo, lines: [] },
+    }],
+  }));
+  const logs = [];
+  const log = (l) => logs.push(l);
+
+  assert.equal(await buildCommand(path.join(src, 'limiter.md'), { out: path.join(site, 'one.html'), log }), 0);
+  const html = readFileSync(path.join(site, 'one.html'), 'utf8');
+  assert.doesNotMatch(html, /\/assets\//);
+  assert.match(html, /<style>[\s\S]*\.cw-code/);
+  const cfg = JSON.parse(/window\.CODE_WALK = (.*?);<\/script>/.exec(html)[1]);
+  assert.equal(cfg.static, true);
+  assert.equal(cfg.walkPath, undefined);
+  assert.equal(cfg.comments[0].bodyHtml.trim(), '<p>Why <strong>429</strong>?</p>');
+  assert.ok(!html.includes(repo), 'no local repo path in the page');
+  // Token colors are classes from a generated stylesheet, not inline styles.
+  assert.match(html, /<span class="h[0-9a-z]+">/);
+  assert.doesNotMatch(html, /<span style="color/);
+
+  assert.equal(await buildCommand(path.join(src, 'limiter.md'), { out: path.join(site, 'bare.html'), comments: false, log }), 0);
+  assert.deepEqual(JSON.parse(/window\.CODE_WALK = (.*?);<\/script>/.exec(readFileSync(path.join(site, 'bare.html'), 'utf8'))[1]).comments, []);
+
+  // A directory: one page per walk plus an index linking to it.
+  assert.equal(await buildCommand(src, { out: path.join(site, 'out'), log }), 0);
+  assert.ok(existsSync(path.join(site, 'out', 'limiter.html')));
+  assert.match(readFileSync(path.join(site, 'out', 'index.html'), 'utf8'), /href="limiter\.html"/);
+
+  // Unresolvable references fail the build.
+  writeFileSync(path.join(src, 'broken.md'), `---\nrepo: ${repo}\n---\n\n\`\`\`show nope:src/x.ts\n\`\`\`\n`);
+  assert.equal(await buildCommand(path.join(src, 'broken.md'), { out: path.join(site, 'broken.html'), log }), 1);
 });
