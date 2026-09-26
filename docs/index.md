@@ -124,7 +124,7 @@ With `code-walk serve`, select lines and press `c` to leave a comment. Comments 
 
 When you're done reading, tell Claude "address my code walk comments". It runs `code-walk comments` to get each open thread with the exact lines it's attached to, makes the changes, and replies with `code-walk comments reply <id> "…" --resolve`. Replies show up in the open page right away.
 
-A published page shows its comments read-only. Here's a thread from that comment-marker change:
+A published page (like this one) shows its comments read-only. Here's a thread from that comment-marker change:
 
 ```diff a031379 5c288d0 -- web/app.js hunk=2
 ```
