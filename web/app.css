@@ -482,16 +482,18 @@ kbd {
 
 /* ---- review: threads and composer ------------------------------------------------ */
 
+/* A solid bar down the gutter spanning the commented lines, capped at the range's ends. */
 .cw-code tr.commented .ln:first-child::after {
   content: "";
   position: absolute;
-  left: 4px;
-  top: 7px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
   background: var(--accent);
 }
+.cw-code tr.commented.cm-start .ln:first-child::after { top: 3px; border-top-left-radius: 2px; border-top-right-radius: 2px; }
+.cw-code tr.commented.cm-end .ln:first-child::after { bottom: 3px; border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; }
 .cw-code tr.commented.resolved-only .ln:first-child::after { background: var(--border); }
 .cw-code .ln:first-child { position: relative; }
 

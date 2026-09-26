@@ -631,7 +631,7 @@
     if (composer) review.drafts.set('new', composer.row.querySelector('textarea').value);
 
     $$('.cw-thread-row, .cw-unplaced').forEach((n) => n.remove());
-    $$('tr.commented').forEach((r) => r.classList.remove('commented', 'resolved-only'));
+    $$('tr.commented').forEach((r) => r.classList.remove('commented', 'resolved-only', 'cm-start', 'cm-end'));
 
     const groups = new Map();
     const unplaced = [];
@@ -654,6 +654,8 @@
           r.classList.add('commented', 'resolved-only');
         }
       }
+      rows[span.start].classList.add('cm-start');
+      rows[span.end - 1].classList.add('cm-end');
     }
     for (const [endRow, list] of groups) {
       const tr = el('tr', 'cw-comment-row cw-thread-row');
