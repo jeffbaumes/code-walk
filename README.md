@@ -6,6 +6,8 @@ A walk is a Markdown file. Its code blocks are `git show` / `git diff` arguments
 
 It's built for AI assistants: ask Claude Code for "a code walkthrough of this branch" and it writes a short walk file and opens it for you.
 
+**See it in action: [jeffbaumes.github.io/code-walk](https://jeffbaumes.github.io/code-walk/)** is a walk through Code Walk's own repo, built with `code-walk build` from [docs/index.md](docs/index.md).
+
 ````md
 ---
 title: Per-client rate limiting
@@ -65,6 +67,7 @@ This builds a small demo repo (a feature branch, plus staged and unstaged edits)
 
 ```
 code-walk serve <walk.md|dir> [--port 4747] [--open]   Serve walks with live reload
+code-walk build <walk.md|dir> [-o <out>] [--no-comments]   Render to self-contained static HTML
 code-walk outline [-C <repo>] [diff args]              Changed files + hunks in walk syntax
 code-walk check <walk.md...>                           Verify every reference resolves
 code-walk resolve <url> [--walk <walk.md>]             Print the code a Code Walk URL points at
@@ -72,6 +75,12 @@ code-walk resolve <url> [--walk <walk.md>]             Print the code a Code Wal
 
 - `serve` defaults to `.code-walk/` if it exists, otherwise the current directory. It binds to 127.0.0.1 only.
 - `outline` defaults to `<default-branch>...HEAD`.
+
+## Static pages
+
+`code-walk build walk.md` writes `walk.html`: one self-contained file with the styles and scripts inline, which you can send to someone or host anywhere. Existing review comments are shown read-only; `--no-comments` leaves them out. Given a directory, it builds every walk in it (to `code-walk-html/` unless you pass `-o`) plus an index page. It exits non-zero if any reference fails to resolve, so it works as a CI step.
+
+The [project site](https://jeffbaumes.github.io/code-walk/) is built this way: [a workflow](.github/workflows/pages.yml) runs `code-walk build docs/index.md` on every push to `main` and deploys the result to GitHub Pages.
 
 ## Block reference
 

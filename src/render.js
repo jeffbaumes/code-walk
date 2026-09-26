@@ -109,11 +109,26 @@ md.renderer.rules.fence = (tokens, idx) => {
 
 // ---- reference blocks -------------------------------------------------------
 
-let renderCtx = { walk: null };
+let renderCtx = { walk: null, isStatic: false, styles: new Map() };
 
-export function renderWalkHtml(prepared, walk) {
-  renderCtx = { walk };
-  return md.renderer.render(prepared.tokens, md.options, {});
+/** `isStatic`: a page to publish, which shouldn't carry this machine's paths. */
+export function renderWalkHtml(prepared, walk, { isStatic = false } = {}) {
+  renderCtx = { walk, isStatic, styles: new Map() };
+  const html = md.renderer.render(prepared.tokens, md.options, {});
+  return tokenStyles(renderCtx.styles) + html;
+}
+
+// Highlighted tokens get a short class per distinct color pair instead of an inline style, which
+// keeps pages with whole files in their folds a fraction of the size.
+function styleClass(style) {
+  const { styles } = renderCtx;
+  if (!styles.has(style)) styles.set(style, `h${styles.size.toString(36)}`);
+  return styles.get(style);
+}
+
+function tokenStyles(styles) {
+  if (!styles.size) return '';
+  return `<style>${[...styles].map(([style, cls]) => `.${cls}{${style}}`).join('')}</style>\n`;
 }
 
 function renderRefBlock(entry) {
@@ -138,10 +153,15 @@ function renderCommitCard(result) {
 </div>`;
 }
 
+/** Where a repo lives, for tooltips and data attributes: its URL, or a local path unless published. */
+function repoWhere(repo) {
+  return repo.remote || (renderCtx.isStatic ? repo.name : repo.root);
+}
+
 function repoLabel(result) {
   const walk = renderCtx.walk;
   if (!walk || (!walk.multiRepo && result.repo.isDefault)) return '';
-  return `<span class="cw-repo" title="${esc(result.repo.remote || result.repo.root)}">${esc(result.repo.name)}</span>`;
+  return `<span class="cw-repo" title="${esc(repoWhere(result.repo))}">${esc(result.repo.name)}</span>`;
 }
 
 function sideBadge(side) {
@@ -172,7 +192,7 @@ function renderSection(result, s) {
     `data-link="${esc(link)}"`,
     `data-frag="${esc(encodeFragment(s.linkTokens))}"`,
     `data-mode="${s.mode}"`,
-    `data-repo="${esc(result.repo.root)}"`,
+    `data-repo="${esc(repoWhere(result.repo))}"`,
     `data-repo-name="${esc(result.repo.name)}"`,
     `data-path="${esc(s.path)}"`,
   ].join(' ');
@@ -266,7 +286,7 @@ function renderTokens(tokens, marks) {
       else if (m && m[0] < end) segEnd = m[0];
       else segEnd = end;
       const seg = text.slice(cursor - pos, segEnd - pos);
-      const span = tok.style ? `<span style="${tok.style}">${esc(seg)}</span>` : esc(seg);
+      const span = tok.style ? `<span class="${styleClass(tok.style)}">${esc(seg)}</span>` : esc(seg);
       html += marked ? `<mark>${span}</mark>` : span;
       cursor = segEnd;
     }
@@ -282,11 +302,19 @@ export function tildify(p) {
   return p && p.startsWith(home + '/') ? '~' + p.slice(home.length) : p;
 }
 
-export function pageHtml({ title, toc, content, walk, walkName, hasMermaid }) {
+/**
+ * The full page. Served pages link /assets/*; a static page (`inline` = { css, js, mermaid? })
+ * carries its CSS and JS inline, its comments baked into the config, and no local paths.
+ */
+export function pageHtml({ title, toc, content, walk, walkName, hasMermaid, inline = null, comments = [] }) {
   const tocHtml = toc.length
     ? `<nav class="cw-toc" aria-label="Contents"><div class="cw-toc-inner"><a class="l1 home" href="#" data-id="">${esc(title || walkName)}</a>${toc.map((h) => `<a class="l${h.level}" href="#${esc(h.id)}" data-id="${esc(h.id)}">${esc(h.text)}</a>`).join('')}</div></nav>`
     : '';
-  const cfg = { walk: walkName, walkPath: walk.walkPath, multiRepo: walk.multiRepo };
+  const cfg = inline
+    ? { static: true, walk: walkName, multiRepo: walk.multiRepo, comments }
+    : { walk: walkName, walkPath: walk.walkPath, multiRepo: walk.multiRepo };
+  const walkPathMeta = walk.walkPath && !inline ? `<code>${esc(tildify(walk.walkPath))}</code>` : '';
+  const script = (src, name) => (inline ? `<script>${inline[name].replace(/<\/script/gi, '<\\/script')}</script>` : `<script src="/assets/${src}"></script>`);
   const bodyHasH1 = /^<h1[\s>]/.test(content.trimStart());
   return `<!doctype html>
 <html lang="en">
@@ -295,7 +323,7 @@ export function pageHtml({ title, toc, content, walk, walkName, hasMermaid }) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title || walkName)}</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚶</text></svg>">
-<link rel="stylesheet" href="/assets/app.css">
+${inline ? `<style>${inline.css}</style>` : '<link rel="stylesheet" href="/assets/app.css">'}
 </head>
 <body>
 <div class="cw-layout">
@@ -303,7 +331,7 @@ ${tocHtml}
 <main class="cw-main">
 <header class="cw-header">
   ${title && !bodyHasH1 ? `<h1>${esc(title)}</h1>` : ''}
-  <div class="cw-walkmeta">${walk.walkPath ? `<code>${esc(tildify(walk.walkPath))}</code>` : ''}${walk.repos.map((r) => `<span class="cw-repo-meta" title="${esc(r.remote || r.path)}">${esc(r.name)}</span>`).join('')}</div>
+  <div class="cw-walkmeta">${walkPathMeta}${walk.repos.map((r) => `<span class="cw-repo-meta" title="${esc(r.remote || (inline ? r.name : r.path))}">${esc(r.name)}</span>`).join('')}</div>
 </header>
 <article class="cw-article">
 ${content}
@@ -312,8 +340,8 @@ ${content}
 </div>
 <div class="cw-toast" role="status" aria-live="polite"></div>
 <script>window.CODE_WALK = ${JSON.stringify(cfg).replace(/</g, '\\u003c')};</script>
-${hasMermaid ? '<script src="/assets/mermaid.min.js"></script>' : ''}
-<script src="/assets/app.js"></script>
+${hasMermaid ? script('mermaid.min.js', 'mermaid') : ''}
+${script('app.js', 'js')}
 </body>
 </html>`;
 }
@@ -321,6 +349,11 @@ ${hasMermaid ? '<script src="/assets/mermaid.min.js"></script>' : ''}
 const commentMd = new MarkdownIt({ html: false, linkify: true, breaks: true });
 export function renderCommentBody(text) {
   return commentMd.render(String(text || ''));
+}
+
+/** A comment thread with its messages' Markdown rendered, as the page's script expects it. */
+export function commentWithHtml(c) {
+  return { ...c, bodyHtml: renderCommentBody(c.body), replies: (c.replies || []).map((r) => ({ ...r, bodyHtml: renderCommentBody(r.body) })) };
 }
 
 // ---- --stat summaries -----------------------------------------------------------
@@ -384,9 +417,9 @@ function renderStat(stat) {
     ? `<div class="cw-sum-warnings">${stat.warnings.map((w) => `<div>⚠ ${esc(w)}</div>`).join('')}</div>` : '';
   const empty = stat.files.length ? '' : '<div class="cw-note">No changes</div>';
   const repoTag = renderCtx.walk && (renderCtx.walk.multiRepo || !stat.repo.isDefault)
-    ? `<span class="cw-repo" title="${esc(stat.repo.remote || stat.repo.root)}">${esc(stat.repo.name)}</span>` : '';
+    ? `<span class="cw-repo" title="${esc(repoWhere(stat.repo))}">${esc(stat.repo.name)}</span>` : '';
 
-  return `<div class="cw-block"><section class="cw-summary" data-repo="${esc(stat.repo.root)}">
+  return `<div class="cw-block"><section class="cw-summary" data-repo="${esc(repoWhere(stat.repo))}">
 <header class="cw-head">
   <div class="cw-head-row cw-title">${repoTag}<span class="cw-sum-headline">${summary}</span>${counts(stat.totals)}${changeBar(stat.totals.added, stat.totals.removed)}${title}</div>
   <div class="cw-head-row cw-meta"><span class="cw-sides">${sideBadge(oldSide)}<span class="cw-arrow" aria-label="to">→</span>${sideBadge(newSide)}</span><span class="cw-cmd"><code>${esc(stat.displayCmd)}</code><button class="cw-copy-cmd" type="button" title="Copy command" aria-label="Copy command">${COPY_ICON}</button></span></div>

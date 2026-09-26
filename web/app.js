@@ -1,5 +1,7 @@
 (() => {
   const CFG = window.CODE_WALK || {};
+  // A page from `code-walk build` has no server: comments are baked in and read-only.
+  const STATIC = !!CFG.static;
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const SEL_RE = /^(?:([LR])(\d+)(?:-([LR])?(\d+))?|hunk=(\d+))$/;
 
@@ -41,7 +43,7 @@
     }
   } catch { /* storage unavailable */ }
 
-  if (window.EventSource) {
+  if (window.EventSource && !STATIC) {
     const es = new EventSource('/events');
     es.onmessage = (ev) => {
       let data = {};
@@ -342,6 +344,7 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable]')) return;
     if (e.key === 'c') {
+      if (STATIC) return;
       e.preventDefault();
       openComposer();
     } else if (e.key === 'n' || e.key === 'p') {
@@ -425,6 +428,13 @@
   }
 
   async function loadComments() {
+    if (STATIC) {
+      review.comments = CFG.comments || [];
+      review.loaded = true;
+      renderThreads();
+      resolveCommentsReady();
+      return;
+    }
     if (!CFG.walk) return;
     try {
       const res = await fetch(`/api/comments?walk=${encodeURIComponent(CFG.walk)}`);
@@ -475,7 +485,7 @@
       return;
     }
     selbar.innerHTML = `<span class="cw-selbar-range"><code>${escHtml(current.fig.dataset.path.split('/').pop())}</code> ${escHtml(current.range)}</span>`
-      + '<button type="button" data-act="comment">Comment <kbd>c</kbd></button>'
+      + (STATIC ? '' : '<button type="button" data-act="comment">Comment <kbd>c</kbd></button>')
       + '<button type="button" data-act="link">Copy link <kbd>y</kbd></button>'
       + '<button type="button" data-act="clear" aria-label="Clear selection" title="Clear selection (Esc)">✕</button>';
     selbar.classList.add('show');
@@ -561,7 +571,7 @@
     const k = escHtml(key);
     const editing = review.editing.has(key);
     const what = !isRoot ? 'reply' : m.replies?.length ? 'thread' : 'comment';
-    const menu = review.confirmingDelete === key
+    const menu = STATIC ? '' : review.confirmingDelete === key
       ? `<span class="cw-msg-menu confirming"><span class="cw-confirm-text">Delete ${what}?</span><button type="button" class="danger" data-act="confirm-delete" data-key="${k}">Delete</button><button type="button" data-act="cancel-delete">Cancel</button></span>`
       : `<span class="cw-msg-menu"><button type="button" data-act="edit" data-key="${k}">Edit</button><button type="button" data-act="delete" data-key="${k}"${what === 'thread' ? ' title="Deletes the whole thread"' : ''}>Delete</button></span>`;
     return `<div class="cw-msg${isRoot ? '' : ' reply'}" data-key="${k}">
@@ -614,6 +624,8 @@
         html += `<div class="cw-thread-actions editing"><button type="button" class="cw-btn ghost" data-act="cancel-edit" data-key="${k}">Cancel</button><button type="button" class="cw-btn ghost save" data-act="save-edit" data-key="${k}">Save</button><span class="cw-hint">⌘↩ to save · Esc to cancel</span></div>`;
       } else if (review.replying.has(c.id)) {
         html += `<div class="cw-composer inline reply"><textarea rows="2" placeholder="Reply…" data-draft="reply:${c.id}"></textarea><div class="cw-composer-actions"><span class="cw-hint">⌘↩ to send</span><button type="button" class="cw-btn" data-act="cancel-reply">Cancel</button><button type="button" class="cw-btn primary" data-act="send-reply">Reply</button></div></div>`;
+      } else if (STATIC) {
+        html += '<div class="cw-thread-actions"><button type="button" class="cw-btn ghost cw-thread-link" data-act="copy-link" title="Copy link to this comment">Link</button></div>';
       } else {
         html += `<div class="cw-thread-actions"><button type="button" class="cw-btn ghost" data-act="reply">Reply</button><button type="button" class="cw-btn ghost" data-act="${resolved ? 'reopen' : 'resolve'}">${resolved ? 'Reopen' : 'Resolve'}</button><button type="button" class="cw-btn ghost cw-thread-link" data-act="copy-link" title="Copy link to this comment">Link</button></div>`;
       }

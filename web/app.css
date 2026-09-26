@@ -79,7 +79,7 @@
     --shadow: none;
     color-scheme: dark;
   }
-  .cw-code .code span[style], .cw-pre span[style] { color: var(--shiki-dark) !important; }
+  .cw-code .code span[class], .cw-pre span[class] { color: var(--shiki-dark) !important; }
 }
 
 * { box-sizing: border-box; }

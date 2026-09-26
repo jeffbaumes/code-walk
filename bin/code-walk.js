@@ -6,11 +6,15 @@ import { checkCommand } from '../src/commands/check.js';
 import { outlineCommand } from '../src/commands/outline.js';
 import { resolveCommand } from '../src/commands/resolve.js';
 import { commentsCommand } from '../src/commands/comments.js';
+import { buildCommand } from '../src/commands/build.js';
 
 const HELP = `code-walk — git-referenced code walkthroughs
 
 Usage:
   code-walk serve <walk.md|dir> [--port 4747] [--open]   Serve walks with live reload
+  code-walk build <walk.md|dir> [-o <out>] [--no-comments]
+                                                         Render to self-contained static HTML
+                                                         (a file → <name>.html; a dir → code-walk-html/)
   code-walk outline [-C <repo>] [diff args]              Changed files + hunks in walk syntax
                                                          (default: <default-branch>...HEAD)
   code-walk check <walk.md...>                           Verify every reference resolves
@@ -63,6 +67,14 @@ async function main() {
           }
         },
       });
+      return;
+    }
+    case 'build': {
+      const out = flag(args, '--out') ?? flag(args, '-o');
+      const comments = !bool(args, '--no-comments');
+      const target = args[0] ?? (existsSync('.code-walk') ? '.code-walk' : null);
+      if (!target) throw new Error('usage: code-walk build <walk.md|dir> [-o <out>] [--no-comments]');
+      process.exitCode = await buildCommand(target, { out, comments });
       return;
     }
     case 'check':

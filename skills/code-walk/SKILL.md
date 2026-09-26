@@ -147,6 +147,16 @@ Keep each comment to one point. Use labels like `nit:` and `question:`, and writ
 
 Comments live next to the walk in `<walk>.comments.json`.
 
+## Sharing a walk as a static page
+
+When the user wants a walk they can send or host (no server, no local repo needed to view it):
+
+```bash
+code-walk build .code-walk/<short-name>.md -o <short-name>.html
+```
+
+The page is one self-contained HTML file. Existing comments are shown read-only (`--no-comments` leaves them out); new comments need `code-walk serve`. A directory builds every walk in it plus an index page. The file embeds the code it references, so check with the user before publishing a walk over private code.
+
 ## Reading a pasted Code Walk URL
 
 `http://localhost:4747/w/<walk>#<git args, + for spaces>&<selection>`

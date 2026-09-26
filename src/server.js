@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { loadWalk } from './walk.js';
-import { prepareWalk, renderWalkHtml, pageHtml, esc, tildify, renderCommentBody } from './render.js';
+import { prepareWalk, renderWalkHtml, pageHtml, esc, tildify, commentWithHtml } from './render.js';
 import { EditConflictError, addComment, addReply, deleteComment, editComment, loadComments, recordWalk, setStatus } from './comments.js';
 import { repoRoot, userName } from './git.js';
 import { resolveUrlText } from './commands/resolve.js';
@@ -85,7 +85,7 @@ export function startServer({ target, port = 4747, host = '127.0.0.1', onListen 
         if (!file) return sendJson(res, 404, { error: `walk not found: ${name}` });
         if (req.method === 'GET') {
           const { comments } = await loadComments(file);
-          return sendJson(res, 200, { me: await authorFor(file), comments: comments.map(withHtml) });
+          return sendJson(res, 200, { me: await authorFor(file), comments: comments.map(commentWithHtml) });
         }
         if (req.method !== 'POST') return sendJson(res, 405, { error: 'method not allowed' });
         if (!sameOrigin(req)) return sendJson(res, 403, { error: 'cross-origin request refused' });
@@ -101,7 +101,7 @@ export function startServer({ target, port = 4747, host = '127.0.0.1', onListen 
           else if (action === '/delete') c = await deleteComment(file, id, body.reply || null);
           else return sendJson(res, 404, { error: 'unknown action' });
           notify(name, 'comments');
-          return sendJson(res, 200, { comment: withHtml(c) });
+          return sendJson(res, 200, { comment: commentWithHtml(c) });
         } catch (e) {
           if (e instanceof EditConflictError) return sendJson(res, 409, { error: e.message, current: e.current });
           return sendJson(res, 400, { error: e.message });
@@ -176,10 +176,6 @@ export function startServer({ target, port = 4747, host = '127.0.0.1', onListen 
   server.on('listening', () => onListen?.({ url: `http://localhost:${server.address().port}${single ? `/w/${encodeURI(single)}` : '/'}`, port: server.address().port }));
   server.listen(port, host);
   return server;
-}
-
-function withHtml(c) {
-  return { ...c, bodyHtml: renderCommentBody(c.body), replies: (c.replies || []).map((r) => ({ ...r, bodyHtml: renderCommentBody(r.body) })) };
 }
 
 function sendJson(res, status, data) {

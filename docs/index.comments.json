@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "comments": [
+    {
+      "id": "46dddb",
+      "author": "Reviewer",
+      "created": "2026-09-25T14:05:00.000Z",
+      "status": "open",
+      "anchor": {
+        "link": "diff a0313793d1fd..5c288d0872eb -- web/app.js",
+        "range": "R657-658",
+        "path": "web/app.js",
+        "mode": "diff",
+        "repoName": "code-walk",
+        "command": "diff a0313793d1fd..5c288d0872eb -- web/app.js",
+        "section": "Review comments",
+        "lines": [
+          {
+            "o": null,
+            "n": 657,
+            "t": "+",
+            "text": "      rows[span.start].classList.add('cm-start');"
+          },
+          {
+            "o": null,
+            "n": 658,
+            "t": "+",
+            "text": "      rows[span.end - 1].classList.add('cm-end');"
+          }
+        ]
+      },
+      "body": "Why mark only the first and last rows? Every row in the range already gets `commented`.",
+      "replies": [
+        {
+          "id": "a1b2c3",
+          "author": "Claude",
+          "created": "2026-09-25T14:07:00.000Z",
+          "body": "The bar is drawn per row, so the middle rows need `commented` to join up. `cm-start` and `cm-end` only tell the CSS where to inset and round the ends, so one range reads as one mark and two adjacent ranges stay visibly separate."
+        }
+      ]
+    }
+  ]
+}
