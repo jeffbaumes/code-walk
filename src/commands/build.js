@@ -1,6 +1,7 @@
-// `code-walk build <walk.md|dir> [-o <out>]`: render walks to self-contained static HTML pages.
+// `code-walk build <walk.md|dir> [-o <out>] [--mermaid-cdn]`: render walks to self-contained static HTML pages.
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -11,7 +12,8 @@ import { prepareWalk, renderWalkHtml, pageHtml, esc, commentWithHtml } from '../
 const here = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const WEB = path.join(here, '..', '..', 'web');
-const MERMAID = path.join(path.dirname(require.resolve('mermaid/package.json')), 'dist', 'mermaid.min.js');
+const MERMAID_PKG = path.dirname(require.resolve('mermaid/package.json'));
+const MERMAID = path.join(MERMAID_PKG, 'dist', 'mermaid.min.js');
 
 const SKIP_DIRS = new Set(['node_modules', '.git']);
 
@@ -26,8 +28,18 @@ async function listWalks(dir, out = []) {
   return out.sort();
 }
 
+/**
+ * Mermaid from jsDelivr at the installed version. The integrity hash is of the local file, so the
+ * browser runs exactly the bytes an inline build would carry, or nothing.
+ */
+async function mermaidFromCdn() {
+  const { version } = JSON.parse(await readFile(path.join(MERMAID_PKG, 'package.json'), 'utf8'));
+  const digest = createHash('sha384').update(await readFile(MERMAID)).digest('base64');
+  return { src: `https://cdn.jsdelivr.net/npm/mermaid@${version}/dist/mermaid.min.js`, integrity: `sha384-${digest}` };
+}
+
 /** One walk as a standalone page: CSS and JS inline, existing comments shown read-only. */
-export async function buildPage(file, { name = path.basename(file, '.md'), comments = true } = {}) {
+export async function buildPage(file, { name = path.basename(file, '.md'), comments = true, mermaidCdn = false } = {}) {
   const walk = await loadWalk(file);
   const prepared = await prepareWalk(walk);
   const errors = prepared.refs.filter((r) => r.error);
@@ -36,7 +48,8 @@ export async function buildPage(file, { name = path.basename(file, '.md'), comme
   const inline = {
     css: await readFile(path.join(WEB, 'app.css'), 'utf8'),
     js: await readFile(path.join(WEB, 'app.js'), 'utf8'),
-    mermaid: hasMermaid ? await readFile(MERMAID, 'utf8') : null,
+    mermaid: hasMermaid && !mermaidCdn ? await readFile(MERMAID, 'utf8') : null,
+    mermaidSrc: hasMermaid && mermaidCdn ? await mermaidFromCdn() : null,
   };
   // Anchors record the local repo path; a published page has no use for it.
   const threads = comments ? (await loadComments(file)).comments.map((c) => commentWithHtml({ ...c, anchor: c.anchor && { ...c.anchor, repo: undefined } })) : [];
@@ -50,7 +63,7 @@ function indexPage(pages) {
 <article class="cw-article"><ul class="cw-index">${pages.list.map((p) => `<li><a href="${encodeURI(p.href)}">${esc(p.title)}</a></li>`).join('')}</ul></article></main></div></body></html>`;
 }
 
-export async function buildCommand(target, { out, comments = true, log = console.log } = {}) {
+export async function buildCommand(target, { out, comments = true, mermaidCdn = false, log = console.log } = {}) {
   const abs = path.resolve(target);
   if (!existsSync(abs)) throw new Error(`not found: ${target}`);
   const shown = (p) => (path.relative(process.cwd(), p).startsWith('..') ? p : path.relative(process.cwd(), p));
@@ -62,7 +75,7 @@ export async function buildCommand(target, { out, comments = true, log = console
 
   if (!statSync(abs).isDirectory()) {
     const dest = path.resolve(out || `${path.basename(abs, '.md')}.html`);
-    const r = await buildPage(abs, { comments });
+    const r = await buildPage(abs, { comments, mermaidCdn });
     await mkdir(path.dirname(dest), { recursive: true });
     await writeFile(dest, r.html);
     report(dest, r);
@@ -76,7 +89,7 @@ export async function buildCommand(target, { out, comments = true, log = console
   for (const file of await listWalks(abs)) {
     if (file.startsWith(destDir + path.sep)) continue;
     const rel = path.relative(abs, file).slice(0, -3).split(path.sep).join('/');
-    const r = await buildPage(file, { name: rel, comments });
+    const r = await buildPage(file, { name: rel, comments, mermaidCdn });
     const dest = path.join(destDir, `${rel}.html`);
     await mkdir(path.dirname(dest), { recursive: true });
     await writeFile(dest, r.html);

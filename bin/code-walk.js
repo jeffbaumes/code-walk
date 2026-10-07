@@ -12,7 +12,7 @@ const HELP = `code-walk — git-referenced code walkthroughs
 
 Usage:
   code-walk serve <walk.md|dir> [--port 4747] [--open]   Serve walks with live reload
-  code-walk build <walk.md|dir> [-o <out>] [--no-comments]
+  code-walk build <walk.md|dir> [-o <out>] [--no-comments] [--mermaid-cdn]
                                                          Render to self-contained static HTML
                                                          (a file → <name>.html; a dir → code-walk-html/)
   code-walk outline [-C <repo>] [diff args]              Changed files + hunks in walk syntax
@@ -72,9 +72,10 @@ async function main() {
     case 'build': {
       const out = flag(args, '--out') ?? flag(args, '-o');
       const comments = !bool(args, '--no-comments');
+      const mermaidCdn = bool(args, '--mermaid-cdn');
       const target = args[0] ?? (existsSync('.code-walk') ? '.code-walk' : null);
-      if (!target) throw new Error('usage: code-walk build <walk.md|dir> [-o <out>] [--no-comments]');
-      process.exitCode = await buildCommand(target, { out, comments });
+      if (!target) throw new Error('usage: code-walk build <walk.md|dir> [-o <out>] [--no-comments] [--mermaid-cdn]');
+      process.exitCode = await buildCommand(target, { out, comments, mermaidCdn });
       return;
     }
     case 'check':

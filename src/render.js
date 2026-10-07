@@ -303,8 +303,9 @@ export function tildify(p) {
 }
 
 /**
- * The full page. Served pages link /assets/*; a static page (`inline` = { css, js, mermaid? })
- * carries its CSS and JS inline, its comments baked into the config, and no local paths.
+ * The full page. Served pages link /assets/*; a static page (`inline` = { css, js, mermaid?, mermaidSrc? })
+ * carries its CSS and JS inline, its comments baked into the config, and no local paths. With
+ * `mermaidSrc` ({ src, integrity }) it loads Mermaid from that URL instead of inlining it.
  */
 export function pageHtml({ title, toc, content, walk, walkName, hasMermaid, inline = null, comments = [] }) {
   const tocHtml = toc.length
@@ -340,7 +341,7 @@ ${content}
 </div>
 <div class="cw-toast" role="status" aria-live="polite"></div>
 <script>window.CODE_WALK = ${JSON.stringify(cfg).replace(/</g, '\\u003c')};</script>
-${hasMermaid ? script('mermaid.min.js', 'mermaid') : ''}
+${hasMermaid ? (inline?.mermaidSrc ? `<script src="${esc(inline.mermaidSrc.src)}" integrity="${esc(inline.mermaidSrc.integrity)}" crossorigin="anonymous"></script>` : script('mermaid.min.js', 'mermaid')) : ''}
 ${script('app.js', 'js')}
 </body>
 </html>`;

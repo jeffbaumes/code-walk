@@ -1,6 +1,6 @@
 ---
 name: code-walk
-description: Present code to the user as a guided walkthrough web page whose snippets are git references (files at commits, diffs, staged/working-tree changes) instead of pasted code. Use when the user asks for a code walkthrough, a tour or review of a branch/PR/commit/changes, or to "show me" how some code works; also use when the user pastes a localhost Code Walk URL (…/w/<name>#show+… or #diff+…).
+description: Present code to the user as a guided walkthrough web page whose snippets are git references (files at commits, diffs, staged/working-tree changes) instead of pasted code. Use when the user asks for a code walkthrough, a tour or review of a branch/PR/commit/changes, or to "show me" how some code works; also use when the user pastes a localhost Code Walk URL (…/w/<name>#show+… or #diff+…), or wants a walk as a static HTML page or a Claude Artifact.
 ---
 
 # Code Walk
@@ -155,7 +155,25 @@ When the user wants a walk they can send or host (no server, no local repo neede
 code-walk build .code-walk/<short-name>.md -o <short-name>.html
 ```
 
-The page is one self-contained HTML file. Existing comments are shown read-only (`--no-comments` leaves them out); new comments need `code-walk serve`. A directory builds every walk in it plus an index page. The file embeds the code it references, so check with the user before publishing a walk over private code.
+The page is one self-contained HTML file. Existing comments are shown read-only (`--no-comments` leaves them out); new comments need `code-walk serve`. A directory builds every walk in it plus an index page. The file embeds the code it references, so check with the user before publishing a walk over private code. Inlined Mermaid is several MB; add `--mermaid-cdn` to load it from jsDelivr (pinned, with an integrity hash) when the page goes somewhere that allows that CDN, such as a Claude Artifact.
+
+## Publishing a walk as a Claude Artifact
+
+When the user wants a walk as a Claude Artifact (a link they can open without a server, or share):
+
+1. `code-walk check .code-walk/<short-name>.md` and fix every error. The build fails on an unresolved reference too.
+2. Build into your scratchpad (or any temp dir) with Mermaid from the CDN:
+
+   ```bash
+   code-walk build .code-walk/<short-name>.md -o <scratchpad>/<short-name>.html --mermaid-cdn
+   ```
+
+3. Publish that file with the Artifact tool: `file_path` = the built page, `icon` = `code`, and a one-sentence `description`. Publish it unchanged. The page already has its title, styles, light and dark themes, and the comment threads, so don't restyle or rewrite it.
+4. To update it, edit the walk (or its comments), rebuild to the same path, and publish the same `file_path` again so the URL stays the same. From a later conversation, pass the Artifact's `url` instead.
+
+Why `--mermaid-cdn`: without it every page with a diagram carries about 5 MB of minified Mermaid. Artifacts allow scripts from `cdn.jsdelivr.net`, and the flag pins the installed version with an integrity hash, so the page renders exactly as the inline build would. What's left to read before publishing is the walk itself, not a minified library.
+
+What the Artifact shows: the walk and its comments, read-only. New comments and replies still need `code-walk serve`, then a rebuild and republish. The theme follows the viewer's OS setting. Artifacts start private, but the page embeds the code it references, so confirm with the user before sharing a walk over private code.
 
 ## Reading a pasted Code Walk URL
 
