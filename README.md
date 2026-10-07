@@ -67,7 +67,7 @@ This builds a small demo repo (a feature branch, plus staged and unstaged edits)
 
 ```
 code-walk serve <walk.md|dir> [--port 4747] [--open]   Serve walks with live reload
-code-walk build <walk.md|dir> [-o <out>] [--no-comments]   Render to self-contained static HTML
+code-walk build <walk.md|dir> [-o <out>] [--no-comments] [--mermaid-cdn]   Render to self-contained static HTML
 code-walk outline [-C <repo>] [diff args]              Changed files + hunks in walk syntax
 code-walk check <walk.md...>                           Verify every reference resolves
 code-walk resolve <url> [--walk <walk.md>]             Print the code a Code Walk URL points at
@@ -79,6 +79,8 @@ code-walk resolve <url> [--walk <walk.md>]             Print the code a Code Wal
 ## Static pages
 
 `code-walk build walk.md` writes `walk.html`: one self-contained file with the styles and scripts inline, which you can send to someone or host anywhere. Existing review comments are shown read-only; `--no-comments` leaves them out. Given a directory, it builds every walk in it (to `code-walk-html/` unless you pass `-o`) plus an index page. It exits non-zero if any reference fails to resolve, so it works as a CI step.
+
+Mermaid is most of a page's size when a walk has diagrams. `--mermaid-cdn` loads it from jsDelivr instead, pinned to the installed version, with a subresource integrity hash of the local copy, so the page renders identically but is much smaller. Use it where a host allows that CDN but limits page size or inline scripts.
 
 The [project site](https://jeffbaumes.github.io/code-walk/) is built this way: [a workflow](.github/workflows/pages.yml) runs `code-walk build docs/index.md` on every push to `main` and deploys the result to GitHub Pages.
 

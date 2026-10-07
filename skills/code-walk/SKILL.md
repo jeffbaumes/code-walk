@@ -155,7 +155,7 @@ When the user wants a walk they can send or host (no server, no local repo neede
 code-walk build .code-walk/<short-name>.md -o <short-name>.html
 ```
 
-The page is one self-contained HTML file. Existing comments are shown read-only (`--no-comments` leaves them out); new comments need `code-walk serve`. A directory builds every walk in it plus an index page. The file embeds the code it references, so check with the user before publishing a walk over private code.
+The page is one self-contained HTML file. Existing comments are shown read-only (`--no-comments` leaves them out); new comments need `code-walk serve`. A directory builds every walk in it plus an index page. The file embeds the code it references, so check with the user before publishing a walk over private code. Inlined Mermaid is several MB; add `--mermaid-cdn` to load it from jsDelivr (pinned, with an integrity hash) when the page goes somewhere that allows that CDN, such as a Claude Artifact.
 
 ## Reading a pasted Code Walk URL
 

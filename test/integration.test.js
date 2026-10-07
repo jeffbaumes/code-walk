@@ -425,6 +425,21 @@ test('build: a self-contained static page with read-only comments and no local p
   assert.ok(existsSync(path.join(site, 'out', 'limiter.html')));
   assert.match(readFileSync(path.join(site, 'out', 'index.html'), 'utf8'), /href="limiter\.html"/);
 
+  // Mermaid is inlined by default, or loaded from jsDelivr at the installed version with an integrity hash.
+  writeFileSync(path.join(src, 'diagram.md'), `---\nrepo: ${repo}\n---\n\n\`\`\`mermaid\nflowchart LR\n  a --> b\n\`\`\`\n`);
+  assert.equal(await buildCommand(path.join(src, 'diagram.md'), { out: path.join(site, 'inline.html'), log }), 0);
+  const inlined = readFileSync(path.join(site, 'inline.html'), 'utf8');
+  assert.doesNotMatch(inlined, /cdn\.jsdelivr\.net/);
+  assert.ok(inlined.length > 1_000_000, 'Mermaid inlined');
+  assert.equal(await buildCommand(path.join(src, 'diagram.md'), { out: path.join(site, 'cdn.html'), mermaidCdn: true, log }), 0);
+  const cdn = readFileSync(path.join(site, 'cdn.html'), 'utf8');
+  const { version } = JSON.parse(readFileSync(new URL('../node_modules/mermaid/package.json', import.meta.url), 'utf8'));
+  const tag = /<script src="([^"]+)" integrity="(sha384-[A-Za-z0-9+/=]+)" crossorigin="anonymous"><\/script>/.exec(cdn);
+  assert.ok(tag, 'external Mermaid script with an integrity hash');
+  assert.equal(tag[1], `https://cdn.jsdelivr.net/npm/mermaid@${version}/dist/mermaid.min.js`);
+  assert.ok(cdn.length < 200_000, 'Mermaid not inlined');
+  assert.ok(cdn.indexOf(tag[0]) < cdn.lastIndexOf('<script>'), 'Mermaid loads before app.js');
+
   // Unresolvable references fail the build.
   writeFileSync(path.join(src, 'broken.md'), `---\nrepo: ${repo}\n---\n\n\`\`\`show nope:src/x.ts\n\`\`\`\n`);
   assert.equal(await buildCommand(path.join(src, 'broken.md'), { out: path.join(site, 'broken.html'), log }), 1);
