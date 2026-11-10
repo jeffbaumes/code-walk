@@ -111,7 +111,7 @@ export function startServer({ target, port = 4747, host = '127.0.0.1', onListen 
         const name = p.slice(3);
         const file = walkFile(name);
         if (!file) return send(res, 404, 'text/html; charset=utf-8', `<p>Walk not found: ${esc(name)}</p>`);
-        const walk = await loadWalk(file, { fallbackDir: root });
+        const walk = await loadWalk(file, { fallbackDir: root, assignIds: true });
         recordWalk(file, walk.repos.map((r) => r.path));
         const prepared = await prepareWalk(walk);
         const content = renderWalkHtml(prepared, walk);

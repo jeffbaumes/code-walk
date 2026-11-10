@@ -165,7 +165,7 @@ async function addCommentFromRef(walkPath, refStr, body, author) {
   if (!ref.selection || ref.selection.type !== 'range') {
     throw new Error('the reference needs a line range as its last token, e.g. R14-16, L8-11 or L12-R14');
   }
-  const walk = await loadWalk(walkPath);
+  const walk = await loadWalk(walkPath, { assignIds: true });
   const result = await resolveRef(walk, ref, { tokens: false });
   const s = result.sections[0];
   const oldLines = splitLines(s.oldText || '');
@@ -182,16 +182,19 @@ async function addCommentFromRef(walkPath, refStr, body, author) {
   const prepared = await prepareWalk(walk, { highlight: false });
   let heading = null;
   let section = null;
+  let snippetId;
   let inWalk = false;
   for (let i = 0; i < prepared.tokens.length && !inWalk; i++) {
     const t = prepared.tokens[i];
     if (t.type === 'heading_open') heading = prepared.tokens[i + 1].content;
     const shown = t.type === 'fence' && t.meta?.result?.sections.find((x) => x.linkTokens.join(' ') === link);
     if (!shown) continue;
+    if (t.meta.error) throw new Error(t.meta.error);
     try {
       selectionSpan(shown.rows, ref.selection, shown);
       inWalk = true;
       section = heading;
+      snippetId = shown.snippetId;
     } catch { /* lines not in this snippet */ }
   }
 
@@ -199,7 +202,7 @@ async function addCommentFromRef(walkPath, refStr, body, author) {
     author,
     body,
     anchor: {
-      link, range: formatSelection(ref.selection), path: s.path, mode: s.mode,
+      snippetId, link, range: formatSelection(ref.selection), path: s.path, mode: s.mode,
       repo: result.repo.root, repoName: result.repo.name, command: link, section, lines,
     },
   });

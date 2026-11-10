@@ -1,7 +1,8 @@
 // Markdown → HTML with git-referenced snippets.
 import MarkdownIt from 'markdown-it';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
-import { parseRef, encodeFragment } from './refs.js';
+import { parseRef, encodeFragment, tokenize, isRefInfo } from './refs.js';
 import { parseOptions, resolveRef } from './resolve.js';
 import { highlightLines, langForFence } from './highlight.js';
 import { rowMatches } from './rows.js';
@@ -13,9 +14,12 @@ export function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-export function isRefInfo(info) {
-  const first = (info || '').trim().split(/\s+/)[0];
-  return first === 'show' || first === 'diff' || first === '-C';
+function blockIdFromContent(content) {
+  const markers = content.split('\n').filter((line) => /^\s*# code-walk-id:/.test(line));
+  if (!markers.length) return null;
+  const match = /^\s*# code-walk-id: ([a-zA-Z0-9_-]{1,64})\s*$/.exec(markers[0]);
+  if (markers.length !== 1 || !match) throw new Error('expected one # code-walk-id: <id> line in this block');
+  return match[1];
 }
 
 function slugify(text, used) {
@@ -73,6 +77,7 @@ export async function prepareWalk(walk, { highlight = true } = {}) {
       t.meta = entry;
       jobs.push((async () => {
         try {
+          entry.blockId = blockIdFromContent(t.content);
           const ref = parseRef(entry.info);
           if (ref.stat) {
             entry.stat = await resolveStat(walk, ref, t.content);
@@ -92,6 +97,33 @@ export async function prepareWalk(walk, { highlight = true } = {}) {
     }
   }
   await Promise.all(jobs);
+  // A copied marker is ambiguous: neither copy should inherit the original's comments.
+  const blockIds = new Map();
+  for (const entry of refs) if (entry.blockId) {
+    const entries = blockIds.get(entry.blockId) || [];
+    entries.push(entry);
+    blockIds.set(entry.blockId, entries);
+  }
+  for (const [id, entries] of blockIds) if (entries.length > 1) {
+    for (const entry of entries) entry.error = `duplicate code-walk-id "${id}"; remove the ID line from the copied block and reload`;
+  }
+  // Saved IDs move with their blocks. Use deterministic occurrence IDs when markers
+  // cannot be saved (e.g. a read-only walk), counting marked blocks too so adding an ID
+  // does not shift their unmarked neighbors.
+  let section = '';
+  const occurrences = new Map();
+  for (const t of tokens) {
+    if (t.type === 'heading_open') section = t.attrGet('id');
+    if (t.type !== 'fence' || !t.meta?.result) continue;
+    for (const s of t.meta.result.sections) {
+      const key = createHash('sha256').update(JSON.stringify([section, tokenize(t.info), s.path])).digest('hex').slice(0, 16);
+      const occurrence = (occurrences.get(key) || 0) + 1;
+      occurrences.set(key, occurrence);
+      s.snippetId = t.meta.blockId
+        ? `${t.meta.blockId}-${createHash('sha256').update(s.path).digest('hex').slice(0, 16)}`
+        : `${key}-${occurrence}`;
+    }
+  }
   return { tokens, refs, title, toc, hasHint };
 }
 
@@ -189,6 +221,7 @@ function renderSection(result, s) {
     : sideBadge(s.sides[0]);
   const link = s.linkTokens.join(' ');
   const attrs = [
+    `data-snippet-id="${esc(s.snippetId)}"`,
     `data-link="${esc(link)}"`,
     `data-frag="${esc(encodeFragment(s.linkTokens))}"`,
     `data-mode="${s.mode}"`,

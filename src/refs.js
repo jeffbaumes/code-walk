@@ -3,6 +3,11 @@
 
 export class RefError extends Error {}
 
+export function isRefInfo(info) {
+  const first = (info || '').trim().split(/\s+/)[0];
+  return first === 'show' || first === 'diff' || first === '-C';
+}
+
 export const SELECTION_RE = /^(?:([LR])(\d+)(?:-([LR])?(\d+))?|hunk=(\d+))$/;
 
 export function tokenize(str) {

@@ -43,7 +43,7 @@ export async function saveComments(walkPath, data) {
 const locks = new Map();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function withFileLock(walkPath, fn) {
+export async function withFileLock(walkPath, fn) {
   const lock = `${sidecarPath(walkPath)}.lock`;
   for (let attempt = 0; ; attempt++) {
     try {
@@ -92,6 +92,7 @@ function cleanAnchor(a) {
     }))
     : [];
   return {
+    snippetId: str(a.snippetId, 100),
     link: str(a.link), range: str(a.range, 40), path: str(a.path, 1000), mode: a.mode === 'diff' ? 'diff' : 'file',
     repo: str(a.repo, 1000), repoName: str(a.repoName, 200), command: str(a.command), section: str(a.section, 300), lines,
   };

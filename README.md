@@ -158,7 +158,7 @@ repo: https://github.com/jeffbaumes/code-walk
 
 **Leaving comments in the page:**
 - Select lines and press `c`, or use **Comment** in the selection toolbar.
-- Comments are threaded under the code. You can reply to them, and edit, resolve, reopen or delete them.
+- Comments are threaded under the code block where you leave them, even when the same lines appear elsewhere in the walk. You can reply to them, and edit, resolve, reopen or delete them.
 - `n` / `p` jump between open comments.
 
 **Handing off to Claude:** tell Claude "address my code walk comments". Claude then:
@@ -170,7 +170,13 @@ Replies appear in the open page immediately.
 
 **Storage:**
 - Comments are saved next to the walk as `<walk>.comments.json`.
+- Serving a walk or adding a comment from the CLI assigns missing block IDs and saves them as hidden `# code-walk-id: …` lines inside the Markdown fences. Preserve these lines when editing or moving blocks. Remove the ID line from a copy so it gets its own ID. Existing IDs are never regenerated; checking and static builds leave the source untouched.
+- Read-only walks still render. If IDs cannot be saved, unmarked blocks use IDs derived from their heading, reference and occurrence; those IDs may change when the walk is edited.
 - `code-walk serve` also records served walks in `~/.code-walk/recent.json`. That's how `code-walk comments` run inside a repo finds the right walk without being given a path.
+
+**Editing while serving:** loading the page, including a live reload, can save IDs for newly added blocks. Reload the Markdown in your editor before making further edits. Saving an older buffer can erase those IDs; the next page load assigns new ones, and comments attached to the lost IDs stop appearing. They remain in the comments file and CLI listing.
+
+Block IDs distinguish copies of the same code reference. Comments also match the pinned Git revision and file path: changing either can stop existing threads from appearing, even when the block ID is preserved. Changing source line numbers can leave a comment's range stale. Comments are not automatically moved to changed code.
 
 ```
 code-walk comments [<walk.md>...] [--all] [--json]
@@ -179,6 +185,8 @@ code-walk comments resolve|reopen <id>
 code-walk comments add --walk <walk.md> "<ref> <range>" <text>
 code-walk comments edit <id> [--reply <id>] --old <text> --new <text>
 ```
+
+`comments add` targets the first matching block in document order. Use the browser to comment on a later copy of the same snippet.
 
 ## Development
 
