@@ -1,11 +1,15 @@
 // Loading a walk file: frontmatter, repo configuration.
-import { readFile } from 'node:fs/promises';
+import { chmod, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
+import MarkdownIt from 'markdown-it';
 import YAML from 'yaml';
 import { repoRoot, GitError } from './git.js';
 import { cacheDirFor, ensureRemote, isRemoteUrl, remoteName } from './remote.js';
+import { isRefInfo } from './refs.js';
+import { withFileLock } from './comments.js';
 
 export function splitFrontmatter(src) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(src);
@@ -34,9 +38,53 @@ function repoEntry(name, value, dir) {
  * A walk context knows how to find repos.
  *   { walkPath, dir, title, data, body, bodyLineOffset, repos: [{name, path}], defaultRepo, multiRepo }
  */
-export async function loadWalk(walkPath, { fallbackDir = process.cwd() } = {}) {
-  const src = await readFile(walkPath, 'utf8');
+export async function loadWalk(walkPath, { fallbackDir = process.cwd(), assignIds = false } = {}) {
+  let src = await readFile(walkPath, 'utf8');
+  // Fully marked walks need no writes, including the comments lock directory.
+  if (assignIds && assignBlockIds(src) !== src) {
+    try {
+      src = await withFileLock(path.resolve(walkPath), async () => {
+        const file = await realpath(walkPath);
+        const original = await readFile(file, 'utf8');
+        const updated = assignBlockIds(original);
+        if (updated === original) return original;
+        const tmp = `${file}.${randomUUID()}.tmp`;
+        try {
+          const mode = (await stat(file)).mode;
+          await writeFile(tmp, updated, { mode, flag: 'wx' });
+          await chmod(tmp, mode);
+          if (await readFile(file, 'utf8') !== original) throw new Error('walk changed while assigning block IDs; reload and try again');
+          await rename(tmp, file);
+        } finally {
+          await rm(tmp, { force: true });
+        }
+        return updated;
+      });
+    } catch (e) {
+      if (!['EACCES', 'EROFS', 'EPERM'].includes(e.code)) throw e;
+      // Render the saved source, not unsaved random IDs that would change on reload.
+      src = await readFile(walkPath, 'utf8');
+    }
+  }
   return walkFromSource(src, walkPath, { fallbackDir });
+}
+
+const blockMd = new MarkdownIt({ html: false });
+
+function assignBlockIds(source) {
+  const { body, bodyLineOffset } = splitFrontmatter(source);
+  const lines = source.split(/(?<=\n)/);
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  // Work backwards so inserted lines do not change the remaining token positions.
+  for (const t of blockMd.parse(body, {}).reverse()) {
+    if (t.type !== 'fence' || !isRefInfo(t.info) || /^\s*# code-walk-id:/m.test(t.content)) continue;
+    const index = bodyLineOffset + t.map[0];
+    const opening = lines[index];
+    // Keep blockquote/indent prefixes; replace any list marker with indentation.
+    const prefix = opening.slice(0, opening.indexOf(t.markup)).replace(/(?:[-+*]|\d+[.)])(?=\s)/g, (m) => ' '.repeat(m.length));
+    lines.splice(index + 1, 0, `${opening.endsWith('\n') ? '' : eol}${prefix}# code-walk-id: ${randomUUID()}${eol}`);
+  }
+  return lines.join('');
 }
 
 export async function walkFromSource(src, walkPath, { fallbackDir = process.cwd() } = {}) {

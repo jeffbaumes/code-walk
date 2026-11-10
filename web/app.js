@@ -244,11 +244,20 @@
     return { tokens, range };
   }
 
-  function findSnippet(link, range) {
+  function findSnippet(link, range, anchor = {}) {
     const strip = (s) => s.replace(/^-C \S+ /, '');
     const figs = $$('.cw-snippet');
     let matches = figs.filter((f) => f.dataset.link === link);
     if (!matches.length) matches = figs.filter((f) => strip(f.dataset.link) === strip(link));
+    if (anchor.snippetId) {
+      // A comment belongs to the block where it was written, even if another block
+      // exposes the same lines. If that block was removed, leave the thread unplaced.
+      matches = matches.filter((f) => f.dataset.snippetId === anchor.snippetId);
+    } else if (anchor.section) {
+      // Older comments only recorded the heading; use it when it still exists.
+      const inSection = matches.filter((f) => sectionTitle(f) === anchor.section);
+      if (inSection.length) matches = inSection;
+    }
     // Prefer a snippet that already shows the lines without expanding folds.
     return matches.find((f) => {
       const span = range && spanFor(f, range);
@@ -390,7 +399,7 @@
 
   // ---- review comments -----------------------------------------------------------------
   // Threads are stored by the server in <walk>.comments.json and anchored to a snippet's
-  // link + line range, with a copy of the lines, so Claude can act on them via the CLI.
+  // occurrence + link + line range, with a copy of the lines, so Claude can act on them via the CLI.
   // editBase: the text each open editor started from. Saves send it so the server can refuse to
   // overwrite a message that changed meanwhile (e.g. Claude edited it from the CLI).
   const review = { me: 'You', comments: [], drafts: new Map(), replying: new Set(), editing: new Set(), editBase: new Map(), loaded: false };
@@ -456,6 +465,7 @@
     const rows = rowsOf(fig).slice(span.start, span.end);
     const file = fig.dataset.mode === 'file';
     return {
+      snippetId: fig.dataset.snippetId,
       link: fig.dataset.link,
       range,
       path: fig.dataset.path,
@@ -649,7 +659,7 @@
     const unplaced = [];
     for (const c of review.comments) {
       const a = c.anchor;
-      const fig = a && a.link && a.range ? findSnippet(a.link, a.range) : null;
+      const fig = a && a.link && a.range ? findSnippet(a.link, a.range, a) : null;
       const span = fig && spanFor(fig, a.range);
       if (!span) { unplaced.push(c); continue; }
       const rows = rowsOf(fig);

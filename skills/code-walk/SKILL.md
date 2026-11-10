@@ -1,6 +1,6 @@
 ---
 name: code-walk
-description: Present code to the user as a guided walkthrough web page whose snippets are git references (files at commits, diffs, staged/working-tree changes) instead of pasted code. Use when the user asks for a code walkthrough, a tour or review of a branch/PR/commit/changes, or to "show me" how some code works; also use when the user pastes a localhost Code Walk URL (…/w/<name>#show+… or #diff+…), or wants a walk as a static HTML page or a Claude Artifact.
+description: Create or edit a guided code walkthrough web page whose snippets are git references (files at commits, diffs, staged/working-tree changes) instead of pasted code. Use when the user asks for a code walkthrough, changes to an existing walk, a tour or review of a branch/PR/commit/changes, or to "show me" how some code works; also use when the user pastes a localhost Code Walk URL (…/w/walk-name#show+… or #diff+…), or wants a walk as a static HTML page or a Claude Artifact.
 ---
 
 # Code Walk
@@ -104,6 +104,24 @@ repos:
 ```
 ````
 
+## Block identity
+
+`code-walk serve` and `code-walk comments add` automatically assign missing block IDs and save them inside the Markdown fences:
+
+````md
+```diff main...feature -- src/router.ts R14-19
+# code-walk-id: b7b8a705-70b7-4b81-9701-350a47f731ab
+```
+````
+
+These lines are hidden in the viewer. Read the current Markdown before editing: serving it, including a live reload, may have added IDs since you wrote it. Saving an older copy can erase IDs and leave existing comments undisplayed. If permissions prevent saving IDs, the walk still renders with fallback IDs that can change when its headings or blocks are edited.
+
+- Preserve the ID when editing or moving a block, including changes to its heading or selected range.
+- Remove the ID line from a copied block so it gets a new ID. New blocks can omit it; Code Walk assigns it on the next serve. Do not reuse a deleted block's ID for unrelated code.
+- Run `code-walk check` after editing; duplicate or malformed IDs are errors.
+
+Before changing referenced code, read `code-walk comments <walk.md> --all --json` to check affected threads. Comments match both the block ID and the pinned code reference. Changing the Git revision or file path can stop a thread from appearing even with its ID preserved; it remains in the comments file and CLI listing. Changing source line numbers can leave the saved range stale. Do not guess a new location or rewrite comment history to make it fit.
+
 ## Writing a good walk
 
 - Start with a grouped `diff --stat` of the whole change, 1–3 sentences on what changed and why, then a `mermaid` diagram if more than a couple of components interact.
@@ -127,9 +145,9 @@ The user can select lines in the page and leave comments (`c`). When they say so
    code-walk comments reply <id> "Changed X to Y in src/router.ts" --resolve
    ```
 
-4. If your changes should appear in the walk, update its references (for example, switch to `diff HEAD -- <path>`) and run `code-walk check` again.
+4. If your changes should appear in the walk, update its references (for example, switch to `diff HEAD -- <path>`), preserve block IDs and review affected comment anchors as described under **Block identity**, then run `code-walk check` again.
 
-To draft a review for the user to edit, write a walk over the change, run `check`, then attach each point to exact lines. The reference is a block info string ending in a range that the walk shows.
+To draft a review for the user to edit, write a walk over the change, run `check`, then attach each point to exact lines. The reference is a block info string ending in a range that the walk shows. `comments add` targets the first matching block in document order; use the browser to target a later copy of the same snippet.
 
 ```bash
 code-walk comments add --walk .code-walk/review.md "diff main...feature -- src/router.ts R14-16" "question: where does clientId come from?"

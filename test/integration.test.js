@@ -1,7 +1,7 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,6 +128,140 @@ test('multi-repo walks use -C names', async () => {
   await assert.rejects(resolveRef(w, parseRef('show -C nope HEAD:a'), { tokens: false }), /unknown repo "nope"/);
 });
 
+test('review comments: repeated snippets have distinct, stable anchors', async () => {
+  const block = '```show main:src/router.ts L1-2\n```\n';
+  const body = '# Repeated\n\n## One\n\n' + block.repeat(2) + '\n## Two\n\n' + block;
+  const idsFor = async (source) => {
+    const w = await walkFromSource(source, null, { fallbackDir: repo });
+    const html = renderWalkHtml(await prepareWalk(w, { highlight: false }), w);
+    return [...html.matchAll(/data-snippet-id="([^"]+)"/g)].map((m) => m[1]);
+  };
+  const ids = await idsFor(body);
+  assert.equal(ids.length, 3);
+  assert.equal(new Set(ids).size, 3);
+  assert.deepEqual(await idsFor(body.replace('## One', 'New introductory prose.\n\n## One')), ids);
+  const marked = body.replace(block, block.replace('\n```', '\n# code-walk-id: first\n```'));
+  assert.deepEqual((await idsFor(marked)).slice(1), ids.slice(1), 'marking a block does not shift its unmarked neighbors');
+});
+
+test('review comments: missing block IDs are saved once and reused', async () => {
+  const walkPath = path.join(dir, 'automatic-ids.md');
+  const source = '---\r\nrepo: ./gateway\r\n---\r\n\r\n> ```show main:src/router.ts L1-2\r\n> ```\r\n\r\n- ```show main:src/router.ts L1-2\r\n  ```\r\n';
+  writeFileSync(walkPath, source);
+  await loadWalk(walkPath);
+  assert.equal(readFileSync(walkPath, 'utf8'), source, 'ordinary reads do not assign IDs');
+  const walks = await Promise.all([loadWalk(walkPath, { assignIds: true }), loadWalk(walkPath, { assignIds: true })]);
+  assert.equal(walks[0].body, walks[1].body, 'concurrent readers agree on saved IDs');
+  const saved = readFileSync(walkPath, 'utf8');
+  const ids = [...saved.matchAll(/# code-walk-id: ([\w-]+)/g)].map((m) => m[1]);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2);
+  assert.equal(saved.replace(/(?:> |  )# code-walk-id: [\w-]+\r\n/g, ''), source);
+  await loadWalk(walkPath, { assignIds: true });
+  assert.equal(readFileSync(walkPath, 'utf8'), saved, 'existing IDs are never rewritten');
+  const prepared = await prepareWalk(walks[0], { highlight: false });
+  assert.deepEqual(prepared.refs.filter((r) => r.error), []);
+  assert.equal(new Set(prepared.refs.map((r) => r.result.sections[0].snippetId)).size, 2);
+
+  const { commentsCommand } = await import('../src/commands/comments.js');
+  const { loadComments } = await import('../src/comments.js');
+  const cliPath = path.join(dir, 'automatic-cli-id.md');
+  writeFileSync(cliPath, '---\nrepo: ./gateway\n---\n```show main:src/router.ts L1-2\n```\n');
+  await commentsCommand(['add', '--walk', cliPath, 'show main:src/router.ts L1', 'From the CLI']);
+  assert.match(readFileSync(cliPath, 'utf8'), /# code-walk-id: [\w-]+/);
+  const cli = await prepareWalk(await loadWalk(cliPath), { highlight: false });
+  assert.equal((await loadComments(cliPath)).comments[0].anchor.snippetId, cli.refs[0].result.sections[0].snippetId);
+});
+
+for (const marked of [true, false]) test(`review comments: read-only walks render ${marked ? 'with' : 'without'} saved IDs`, async (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) return t.skip('requires POSIX permissions without root');
+  const folder = mkdtempSync(path.join(dir, 'read-only-'));
+  const walkPath = path.join(folder, 'walk.md');
+  const block = (id) => `\`\`\`show main:src/router.ts L1-2\n${marked ? `# code-walk-id: ${id}\n` : ''}\`\`\`\n`;
+  const source = '---\nrepo: ../gateway\n---\n' + block('first') + block('second');
+  writeFileSync(walkPath, source);
+  chmodSync(folder, 0o555);
+  t.after(() => chmodSync(folder, 0o755));
+  const render = async () => {
+    const w = await loadWalk(walkPath, { assignIds: true });
+    const prepared = await prepareWalk(w, { highlight: false });
+    assert.deepEqual(prepared.refs.filter((r) => r.error), []);
+    return renderWalkHtml(prepared, w);
+  };
+  const html = await render();
+  const ids = [...html.matchAll(/data-snippet-id="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(ids.length, 2);
+  assert.equal(new Set(ids).size, 2);
+  assert.equal(await render(), html, 'read-only renders have stable anchors');
+  assert.equal(readFileSync(walkPath, 'utf8'), source);
+  assert.deepEqual(readdirSync(folder), ['walk.md']);
+});
+
+test('review comments: fallback IDs can be saved with comments on a read-only symlink target', async (t) => {
+  if (process.platform === 'win32' || process.getuid?.() === 0) return t.skip('requires POSIX permissions without root');
+  const { commentsCommand } = await import('../src/commands/comments.js');
+  const { loadComments } = await import('../src/comments.js');
+  const folder = mkdtempSync(path.join(dir, 'read-only-target-'));
+  const target = path.join(folder, 'walk.md');
+  const walkPath = path.join(dir, 'read-only-link.md');
+  const block = '```show main:src/router.ts L1-2\n```\n';
+  const source = '---\nrepo: ./gateway\n---\n' + block.repeat(2);
+  writeFileSync(target, source);
+  symlinkSync(target, walkPath);
+  chmodSync(folder, 0o555);
+  t.after(() => chmodSync(folder, 0o755));
+  await commentsCommand(['add', '--walk', walkPath, 'show main:src/router.ts L1', 'Read-only source, writable comments']);
+  const { comments } = await loadComments(walkPath);
+  assert.equal(comments.length, 1);
+  const prepared = await prepareWalk(await loadWalk(walkPath, { assignIds: true }), { highlight: false });
+  assert.deepEqual(prepared.refs.filter((r) => r.error), []);
+  const ids = prepared.refs.map((r) => r.result.sections[0].snippetId);
+  assert.equal(new Set(ids).size, 2);
+  assert.equal(comments[0].anchor.snippetId, ids[0], 'CLI comments use the first matching block, including fallback IDs');
+  assert.equal(readFileSync(target, 'utf8'), source);
+  assert.deepEqual(readdirSync(folder), ['walk.md']);
+});
+
+test('review comments: saved IDs survive edits without rewriting the walk', async () => {
+  const { commentsCommand } = await import('../src/commands/comments.js');
+  const { loadComments } = await import('../src/comments.js');
+  const walkPath = path.join(dir, 'authored-ids.md');
+  const frontmatter = '---\nrepo: ./gateway\n---\n';
+  const block = (id) => `\`\`\`show main:src/router.ts L1-2\n# code-walk-id: ${id}\n\`\`\`\n`;
+  const source = frontmatter + '# Original\n\n' + block('first') + block('second');
+  const render = async () => {
+    const w = await loadWalk(walkPath);
+    const prepared = await prepareWalk(w, { highlight: false });
+    assert.deepEqual(prepared.refs.filter((r) => r.error), []);
+    const html = renderWalkHtml(prepared, w);
+    assert.doesNotMatch(html, /# code-walk-id:/);
+    return [...html.matchAll(/data-snippet-id="([^"]+)"/g)].map((m) => m[1]);
+  };
+  writeFileSync(walkPath, source);
+  const ids = await render();
+  assert.equal(new Set(ids).size, 2);
+  await commentsCommand(['add', '--walk', walkPath, 'show main:src/router.ts L1', 'From the CLI']);
+  assert.equal((await loadComments(walkPath)).comments[0].anchor.snippetId, ids[0]);
+  assert.equal(readFileSync(walkPath, 'utf8'), source);
+  const edited = frontmatter + '# Renamed\n\n' + block('new-copy') + block('second') + block('first').replace('L1-2', 'L1-3');
+  writeFileSync(walkPath, edited);
+  const moved = await render();
+  assert.deepEqual(moved.slice(1), [ids[1], ids[0]]);
+  assert.ok(!ids.includes(moved[0]));
+  assert.equal(readFileSync(walkPath, 'utf8'), edited);
+});
+
+test('review comments: duplicate and malformed authored IDs are errors', async () => {
+  const block = '```show main:src/router.ts L1-2\n# code-walk-id: copied\n```\n';
+  const w = await walkFromSource(block.repeat(2), null, { fallbackDir: repo });
+  const prepared = await prepareWalk(w, { highlight: false });
+  assert.equal(prepared.refs.length, 2);
+  for (const r of prepared.refs) assert.match(r.error, /duplicate code-walk-id/);
+  assert.doesNotMatch(renderWalkHtml(prepared, w), /class="cw-snippet"/);
+  const invalid = await walkFromSource(block.replace('copied', 'invalid id'), null, { fallbackDir: repo });
+  assert.match((await prepareWalk(invalid, { highlight: false })).refs[0].error, /expected one # code-walk-id/);
+});
+
 test('review comments: add from the browser API shape, list, reply and resolve from the CLI', async () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'code-walk-home-'));
   process.env.CODE_WALK_HOME = home;
@@ -139,6 +273,7 @@ test('review comments: add from the browser API shape, list, reply and resolve f
     author: 'Jeff',
     body: 'Hard-coded retry-after?',
     anchor: {
+      snippetId: 'router-2',
       link: 'diff 2b88ce2dbf1f..de7efebec33f -- src/router.ts', range: 'R14-16', path: 'src/router.ts', mode: 'diff',
       repo, command: 'diff 2b88ce2dbf1f..de7efebec33f -- src/router.ts', section: 'Wiring it into the router',
       lines: [{ o: null, n: 15, t: '+', text: "    return { status: 429 };" }],
@@ -160,6 +295,7 @@ test('review comments: add from the browser API shape, list, reply and resolve f
   }
   const { comments } = await loadComments(walkPath);
   assert.equal(comments[0].status, 'resolved');
+  assert.equal(comments[0].anchor.snippetId, 'router-2');
 });
 
 test('review comments: replies get ids and can be edited or deleted individually', async () => {
